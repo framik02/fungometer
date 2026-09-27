@@ -1382,43 +1382,98 @@ function migliorEntro(punto, km) {
   return migliore;
 }
 
+const ATTESA_SUGGERIMENTI_MS = 350;   // pausa nella scrittura prima di chiedere i suggerimenti
+let timerSuggerimenti = null;
+let ultimaRicerca = null;             // per annullare le richieste superate
+
 function preparaRicerca() {
   const modulo = document.getElementById("ricerca");
   const campo = document.getElementById("testo-ricerca");
   const elenco = document.getElementById("risultati-ricerca");
+  const lente = document.getElementById("apri-ricerca");
+
+  // La lente apre e chiude la barra; la x la chiude e toglie il segnaposto
+  lente.addEventListener("click", () => (modulo.hidden ? apriRicerca() : chiudiRicerca()));
+  document.getElementById("chiudi-ricerca").addEventListener("click", () => chiudiRicerca(true));
+
+  // Suggerimenti mentre scrivi, dopo 3 lettere e una piccola pausa
+  campo.addEventListener("input", () => {
+    clearTimeout(timerSuggerimenti);
+    const testo = campo.value.trim();
+    if (testo.length < 3) { elenco.hidden = true; return; }
+    timerSuggerimenti = setTimeout(() => cercaPosto(testo), ATTESA_SUGGERIMENTI_MS);
+  });
+  // Invio: cerca subito
   modulo.addEventListener("submit", (ev) => {
     ev.preventDefault();
+    clearTimeout(timerSuggerimenti);
     const testo = campo.value.trim();
     if (testo.length >= 2) cercaPosto(testo);
   });
-  // L'elenco si chiude toccando fuori o cancellando il testo
-  document.addEventListener("click", (ev) => { if (!modulo.contains(ev.target)) elenco.hidden = true; });
-  campo.addEventListener("input", () => { if (!campo.value) elenco.hidden = true; });
+  // L'elenco si chiude toccando fuori
+  document.addEventListener("click", (ev) => {
+    if (!modulo.contains(ev.target) && ev.target !== lente && !lente.contains(ev.target)) elenco.hidden = true;
+  });
+}
+
+function apriRicerca() {
+  document.getElementById("ricerca").hidden = false;
+  document.getElementById("apri-ricerca").setAttribute("aria-expanded", "true");
+  document.getElementById("testo-ricerca").focus();
+}
+
+/** Chiude la barra; con `togliSegnaposto` cancella anche il testo e il segnaposto. */
+function chiudiRicerca(togliSegnaposto = false) {
+  document.getElementById("ricerca").hidden = true;
+  document.getElementById("risultati-ricerca").hidden = true;
+  document.getElementById("apri-ricerca").setAttribute("aria-expanded", "false");
+  if (togliSegnaposto) {
+    document.getElementById("testo-ricerca").value = "";
+    togliSegnaRicerca();
+  }
+}
+
+function togliSegnaRicerca() {
+  if (segnaRicerca) { segnaRicerca.remove(); segnaRicerca = null; }
 }
 
 /**
- * Cerca il posto con Nominatim (OpenStreetMap). La ricerca parte solo quando
- * premi invio o la lente: le regole di Nominatim vietano le ricerche a ogni
- * lettera digitata. Si cerca in Italia, preferendo le nostre aree.
+ * Cerca il posto con Photon (komoot), un servizio sui dati di OpenStreetMap
+ * fatto apposta per i suggerimenti mentre scrivi. Si cerca in Italia,
+ * preferendo i posti vicini al centro della mappa.
  */
 async function cercaPosto(testo) {
   const elenco = document.getElementById("risultati-ricerca");
-  elenco.hidden = false;
-  elenco.innerHTML = `<li class="nota-ricerca">Cerco "${testo.replace(/</g, "&lt;")}"…</li>`;
-  const limiti = limitiDi(stato.celle).pad(0.1);
+  if (elenco.hidden || !elenco.querySelector(".risultato")) {
+    elenco.hidden = false;
+    elenco.innerHTML = `<li class="nota-ricerca">Cerco "${testoSicuro(testo)}"…</li>`;
+  }
+  if (ultimaRicerca) ultimaRicerca.abort();   // una richiesta superata non serve più
+  ultimaRicerca = new AbortController();
+  const centro = mappa.getCenter();
   const parametri = new URLSearchParams({
-    format: "jsonv2", q: testo, countrycodes: "it", limit: "5", "accept-language": "it",
-    viewbox: [limiti.getWest(), limiti.getNorth(), limiti.getEast(), limiti.getSouth()].map((v) => v.toFixed(3)).join(","),
+    q: testo, limit: "5", lang: "default",
+    lat: centro.lat.toFixed(3), lon: centro.lng.toFixed(3),
+    bbox: "6.6,35.4,18.6,47.1",   // Italia
   });
   let risultati;
   try {
-    const risposta = await fetch(`https://nominatim.openstreetmap.org/search?${parametri}`);
+    const risposta = await fetch(`https://photon.komoot.io/api/?${parametri}`, { signal: ultimaRicerca.signal });
     if (!risposta.ok) throw new Error(risposta.status);
-    risultati = await risposta.json();
+    risultati = (await risposta.json()).features.map((f) => {
+      const p = f.properties;
+      return {
+        name: p.name || p.street || testo,
+        display_name: [p.name || p.street, p.city || p.county || p.district, p.state].filter(Boolean).join(", "),
+        lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0],
+      };
+    });
   } catch (errore) {
+    if (errore.name === "AbortError") return;
     elenco.innerHTML = `<li class="nota-ricerca">La ricerca non risponde. Controlla la connessione e riprova.</li>`;
     return;
   }
+  if (document.getElementById("ricerca").hidden) return;   // la barra è stata chiusa nel frattempo
   if (!risultati.length) {
     elenco.innerHTML = `<li class="nota-ricerca">Nessun posto trovato. Prova con un nome diverso.</li>`;
     return;
@@ -1463,15 +1518,22 @@ async function cercaPosto(testo) {
         <div class="valutazione">${valutazione}</div>
         <div class="azioni-risultato">${azioni.join("")}</div>
       </li>`;
-  }).join("") + `<li class="attribuzione">${giorno} · ricerca © OpenStreetMap</li>`;
+  }).join("") + `<li class="attribuzione">${giorno} · ricerca Photon, dati © OpenStreetMap</li>`;
 
   elenco.querySelectorAll("button[data-azione]").forEach((b) => {
     b.addEventListener("click", () => {
       const v = voci[Number(b.dataset.i)];
       elenco.hidden = true;
       document.getElementById("testo-ricerca").blur();
-      if (segnaRicerca) segnaRicerca.remove();
-      segnaRicerca = L.marker(v.punto, { title: v.r.name || "" }).addTo(mappa);
+      togliSegnaRicerca();
+      const contenuto = document.createElement("div");
+      contenuto.className = "segnaposto-ricerca";
+      contenuto.innerHTML = `<strong>${testoSicuro(v.r.name || "")}</strong><br>` +
+        `<button type="button">Togli segnaposto</button>`;
+      contenuto.querySelector("button").addEventListener("click", () => { mappa.closePopup(); togliSegnaRicerca(); });
+      segnaRicerca = L.marker(v.punto, { title: v.r.name || "" }).bindPopup(contenuto).addTo(mappa);
+      document.getElementById("ricerca").hidden = true;
+      document.getElementById("apri-ricerca").setAttribute("aria-expanded", "false");
       if (stato.selezionando) impostaModalita(false);
       const bersaglio = b.dataset.azione === "migliore" ? v.migliore.q : b.dataset.azione === "qui" ? v.qui : null;
       const centro = b.dataset.azione === "migliore" ? v.migliore.centro : v.punto;
