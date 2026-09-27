@@ -40,6 +40,10 @@ const stato = {
   canaloni: null,
   indiceCanaloni: null,
   area: null,
+  posizione: null,      // la tua posizione (dal GPS), per i posti vicini
+  vicini: [],           // i 3 posti migliori vicino a te
+  vicinoMostrato: 0,    // quale dei 3 si vede nella scheda in basso
+  stratoVicini: null,   // segnaposti 1, 2, 3 sulla mappa
 };
 
 const N = 6;                 // quadrati da 500 m per lato di una cella da 3 km
@@ -49,6 +53,9 @@ const ZOOM_NETTO = 13;       // da qui in su i quadrati si vedono netti
 const ZOOM_MASSIMI = 12;     // sotto questo ogni pixel prende il migliore dei vicini
 const GIORNO_INCERTO = 5;    // i giorni da +5 in poi sono previsioni poco affidabili
 const QUADRATI_INDICE = 10;  // quanti quadrati entrano nell'indice del giorno
+const PIXEL_PER_QUADRATO = 4; // risoluzione dell'immagine morbida (da lontano)
+const DISTANZA_META_KM = 15; // a questa distanza un posto conta la metà
+const DISTANZA_MINIMA_KM = 1.5; // i 3 posti vicini distano almeno questo fra loro
 
 let mappa;
 let segnaPosizione = null;
@@ -123,6 +130,30 @@ function giudizio(punteggio) {
   if (punteggio >= 40) return "Discreto";
   if (punteggio >= 20) return "Scarso";
   return "Sfavorevole";
+}
+
+/**
+ * Tendenza di un quadrato nel giorno g: confronta il punteggio del giorno con
+ * la media dei due giorni dopo (nell'ultimo giorno, con il giorno prima).
+ * Sotto i 3 punti di differenza è "stabile".
+ */
+function tendenza(cella, k, g = stato.giorno) {
+  const n = stato.punteggi.giorni.length;
+  const oggi = punteggioQuadrato(cella, k, g);
+  let differenza;
+  if (g < n - 1) {
+    const dopo = [g + 1, g + 2].filter((x) => x < n).map((x) => punteggioQuadrato(cella, k, x));
+    differenza = dopo.reduce((a, b) => a + b, 0) / dopo.length - oggi;
+  } else {
+    differenza = oggi - punteggioQuadrato(cella, k, g - 1);
+  }
+  if (differenza >= 3) return { testo: "in salita", simbolo: "↗", classe: "sale" };
+  if (differenza <= -3) return { testo: "in calo", simbolo: "↘", classe: "scende" };
+  return { testo: "stabile", simbolo: "→", classe: "stabile" };
+}
+
+function etichettaTendenza(t) {
+  return `<span class="tendenza ${t.classe}" title="Rispetto ai giorni successivi">${t.simbolo} ${t.testo}</span>`;
 }
 
 /** Nome leggibile di un ambiente: "t2" -> Castagneto, "c311" -> Boschi di latifoglie. */
@@ -202,8 +233,13 @@ function preparaGriglia() {
         passoLat, passoLon,
         sud: sud - riga * N * passoLat,       // origine della griglia (angolo sud-ovest)
         ovest: ovest - colonna * N * passoLon,
+        rMin: Infinity, rMax: -Infinity, cMin: Infinity, cMax: -Infinity, celle: [],
       };
     }
+    const a = stato.aree[cella.area];
+    a.celle.push(cella);
+    a.rMin = Math.min(a.rMin, riga); a.rMax = Math.max(a.rMax, riga);
+    a.cMin = Math.min(a.cMin, colonna); a.cMax = Math.max(a.cMax, colonna);
     const zona = stato.zone[cella.zona_id] || (stato.zone[cella.zona_id] = {
       id: cella.zona_id, area: cella.area, celle: [],
       rMin: Infinity, rMax: -Infinity, cMin: Infinity, cMax: -Infinity,
@@ -321,6 +357,8 @@ async function avvia() {
   preparaAree();
   preparaSelezione();
   creaImmagini();
+  preparaVicini();
+  preparaMiglioriQui();
 
   // Prima inquadratura: l'ultima area scelta, altrimenti tutte e due
   const area = ricordato("area");
@@ -464,6 +502,12 @@ function quadratiDellIndice() {
     });
     return elenco;
   }
+  return quadratiSulloSchermo();
+}
+
+/** Tutti i quadrati con dati che si vedono sullo schermo. */
+function quadratiSulloSchermo() {
+  const elenco = [];
   const vista = mappa.getBounds();
   stato.celle.forEach((cella) => {
     const [sud, ovest, nord, est] = cella.bbox;
@@ -471,7 +515,9 @@ function quadratiDellIndice() {
     for (let k = 0; k < N * N; k++) {
       if (stato.statiche[cella.id][k * DATI_PER_QUADRATO] === VUOTO) continue;
       const R = cella.riga * N + Math.floor(k / N), C = cella.colonna * N + (k % N);
-      if (vista.intersects(confiniQuadrato(cella.area, R, C))) elenco.push({ cella, k });
+      if (vista.intersects(confiniQuadrato(cella.area, R, C))) {
+        elenco.push({ area: cella.area, R, C, cella, k });
+      }
     }
   });
   return elenco;
@@ -566,29 +612,37 @@ function preparaMappa() {
     if (!stato.punteggi) return;
     aggiornaAreaDaMappa();
     if (!stato.selezione.size) segnaGiorniMigliori();
+    if (!document.getElementById("pannello-migliori").hidden) mostraMiglioriQui();
   });
 }
 
 /**
- * Da lontano: gradiente, e ogni pixel prende il migliore dei vicini.
- * Da vicino: quadrati netti, ognuno col suo valore.
+ * Due modi di disegnare i quadrati:
+ * - da vicino (zoom 13 e oltre): un'immagine per zona, un pixel per quadrato,
+ *   mostrata senza sfumature: quadrati netti;
+ * - da lontano: un'immagine grande per area, sfumata con un filtro di
+ *   sfocatura: gradiente morbido, senza spigoli fra una zona e l'altra.
+ *   Sotto lo zoom 12 ogni quadrato prende il valore migliore dei vicini, così
+ *   un posto ottimo non sparisce nella sfumatura.
  */
-let eraVicino = null, eraLontano = null;
+let eraVicino = null, eraMassimi = null;
 function aggiornaStileZoom() {
   const vicino = mappa.getZoom() >= ZOOM_NETTO;
-  const lontano = mappa.getZoom() < ZOOM_MASSIMI;
+  const massimi = mappa.getZoom() < ZOOM_MASSIMI;
   if (vicino !== eraVicino) {
     document.querySelector(".contenitore-mappa").classList.toggle("quadrati-netti", vicino);
+    Object.values(stato.zone).forEach((z) => (vicino ? z.immagine.addTo(mappa) : z.immagine.remove()));
+    Object.values(stato.aree).forEach((a) => (vicino ? a.immagine.remove() : a.immagine.addTo(mappa)));
     eraVicino = vicino;
-  }
-  if (lontano !== eraLontano) {
-    const primaVolta = eraLontano === null;
-    eraLontano = lontano;
-    if (!primaVolta) dipingiTutte();
+    eraMassimi = massimi;
+    dipingiTutte();
+  } else if (massimi !== eraMassimi) {
+    eraMassimi = massimi;
+    if (!vicino) dipingiTutte();
   }
 }
 
-/** Un'immagine per zona: un pixel per ogni quadrato da 500 m. */
+/** Crea le immagini (vuote): una per zona (netta) e una per area (morbida). */
 function creaImmagini() {
   Object.values(stato.zone).forEach((zona) => {
     const g = stato.aree[zona.area];
@@ -601,9 +655,45 @@ function creaImmagini() {
       [g.sud + zona.rMin * N * g.passoLat, g.ovest + zona.cMin * N * g.passoLon],
       [g.sud + (zona.rMax + 1) * N * g.passoLat, g.ovest + (zona.cMax + 1) * N * g.passoLon],
     ];
-    zona.immagine = L.imageOverlay(zona.tela.toDataURL(), limiti, { className: "quadrati", interactive: false })
-      .addTo(mappa);
+    zona.immagine = L.imageOverlay(zona.tela.toDataURL(), limiti, { className: "quadrati", interactive: false });
   });
+  Object.values(stato.aree).forEach(preparaImmagineMorbida);
+}
+
+/** Da latitudine a coordinata verticale della proiezione della mappa (Mercatore). */
+function mercatore(lat) {
+  return Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+}
+
+/**
+ * Prepara l'immagine morbida di un'area. È costruita direttamente nella
+ * proiezione della mappa (Mercatore), così resta allineata anche su un'area
+ * alta un grado di latitudine. Ha un bordo di 2 quadrati vuoti dove la
+ * sfumatura può allargarsi.
+ */
+function preparaImmagineMorbida(a) {
+  const M = 2;
+  a.R0 = a.rMin * N - M; a.R1 = (a.rMax + 1) * N - 1 + M;
+  a.C0 = a.cMin * N - M; a.C1 = (a.cMax + 1) * N - 1 + M;
+  a.W = a.C1 - a.C0 + 1; a.H = a.R1 - a.R0 + 1;
+  const latSud = a.sud + a.R0 * a.passoLat, latNord = a.sud + (a.R1 + 1) * a.passoLat;
+  const lonOvest = a.ovest + a.C0 * a.passoLon, lonEst = a.ovest + (a.C1 + 1) * a.passoLon;
+  a.pxW = a.W * PIXEL_PER_QUADRATO;
+  const scala = a.pxW / ((lonEst - lonOvest) * Math.PI / 180);   // pixel per unità di Mercatore
+  a.pxH = Math.round((mercatore(latNord) - mercatore(latSud)) * scala);
+  // Per ogni riga di pixel, la riga di quadrati che ci cade (dall'alto, cioè da nord)
+  a.rigaDelPixel = new Int32Array(a.pxH);
+  for (let y = 0; y < a.pxH; y++) {
+    const m = mercatore(latNord) - (y + 0.5) / scala;
+    const lat = (2 * Math.atan(Math.exp(m)) - Math.PI / 2) * 180 / Math.PI;
+    a.rigaDelPixel[y] = Math.min(a.H - 1, Math.max(0, Math.floor((lat - latSud) / a.passoLat)));
+  }
+  a.tela = document.createElement("canvas");
+  a.tela.width = a.pxW; a.tela.height = a.pxH;
+  a.sfumata = document.createElement("canvas");
+  a.sfumata.width = a.pxW; a.sfumata.height = a.pxH;
+  a.immagine = L.imageOverlay(a.tela.toDataURL(), [[latSud, lonOvest], [latNord, lonEst]],
+    { className: "quadrati-morbidi", interactive: false });
 }
 
 /** Ricolora tutto dopo un cambio di specie o di giorno. */
@@ -611,58 +701,93 @@ function ricolora() {
   mappa.closePopup();
   dipingiTutte();
   segnaGiorniMigliori();
+  if (stato.posizione) aggiornaVicini();
+  if (!document.getElementById("pannello-migliori").hidden) mostraMiglioriQui();
 }
 
+/** Ridipinge solo le immagini che si stanno vedendo. */
 function dipingiTutte() {
-  Object.values(stato.zone).forEach(dipingiZona);
+  if (mappa.getZoom() >= ZOOM_NETTO) Object.values(stato.zone).forEach(dipingiZona);
+  else Object.values(stato.aree).forEach(dipingiArea);
 }
 
-/**
- * Dipinge l'immagine di una zona. Da lontano (zoom sotto 12) ogni pixel prende
- * il valore migliore fra sé e i vicini: così un quadrato ottimo non sparisce
- * nella sfumatura con quelli intorno.
- */
+/** Colori già pronti per i punteggi interi da 0 a 100: [r, g, b, alfa]. */
+const TAVOLOZZA = Array.from({ length: 101 }, (_, v) => [...coloreRgb(v), Math.round(255 * opacita(v))]);
+
+/** Ogni valore diventa il migliore fra sé e gli 8 vicini (celle vuote escluse). */
+function massimiDeiVicini(valori, W, H) {
+  const finali = new Float32Array(valori);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (valori[y * W + x] < 0) continue;
+      let m = valori[y * W + x];
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if (xx >= 0 && yy >= 0 && xx < W && yy < H) m = Math.max(m, valori[yy * W + xx]);
+        }
+      }
+      finali[y * W + x] = m;
+    }
+  }
+  return finali;
+}
+
+/** Dipinge l'immagine netta di una zona: un pixel per quadrato. */
 function dipingiZona(zona) {
   const W = zona.larghezza, H = zona.altezza;
-  const valori = new Float32Array(W * H).fill(-1);   // -1 = nessun dato (trasparente)
+  const ctx = zona.tela.getContext("2d");
+  const img = ctx.createImageData(W, H);
   zona.celle.forEach((cella) => {
     for (let k = 0; k < N * N; k++) {
       if (stato.statiche[cella.id][k * DATI_PER_QUADRATO] === VUOTO) continue;
       const x = (cella.colonna - zona.cMin) * N + (k % N);
       const y = H - 1 - ((cella.riga - zona.rMin) * N + Math.floor(k / N)); // nord in alto
-      valori[y * W + x] = punteggioQuadrato(cella, k);
+      const colore4 = TAVOLOZZA[Math.round(punteggioQuadrato(cella, k))];
+      img.data.set(colore4, (y * W + x) * 4);
     }
   });
-
-  let finali = valori;
-  if (mappa.getZoom() < ZOOM_MASSIMI) {
-    finali = new Float32Array(valori);
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        if (valori[y * W + x] < 0) continue;
-        let m = valori[y * W + x];
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const xx = x + dx, yy = y + dy;
-            if (xx >= 0 && yy >= 0 && xx < W && yy < H) m = Math.max(m, valori[yy * W + xx]);
-          }
-        }
-        finali[y * W + x] = m;
-      }
-    }
-  }
-
-  const ctx = zona.tela.getContext("2d");
-  const img = ctx.createImageData(W, H);
-  for (let i = 0; i < finali.length; i++) {
-    const v = finali[i];
-    if (v < 0) continue;
-    const [r, g, b] = coloreRgb(v);
-    img.data[i * 4] = r; img.data[i * 4 + 1] = g; img.data[i * 4 + 2] = b;
-    img.data[i * 4 + 3] = Math.round(255 * opacita(v));
-  }
   ctx.putImageData(img, 0, 0);
   zona.immagine.setUrl(zona.tela.toDataURL());
+}
+
+/** Dipinge l'immagine morbida di un'area e la sfuma. */
+function dipingiArea(a) {
+  // 1. il punteggio di ogni quadrato, in una griglia con righe da sud a nord
+  let valori = new Float32Array(a.W * a.H).fill(-1);
+  a.celle.forEach((cella) => {
+    for (let k = 0; k < N * N; k++) {
+      if (stato.statiche[cella.id][k * DATI_PER_QUADRATO] === VUOTO) continue;
+      const R = cella.riga * N + Math.floor(k / N), C = cella.colonna * N + (k % N);
+      valori[(R - a.R0) * a.W + (C - a.C0)] = punteggioQuadrato(cella, k);
+    }
+  });
+  if (mappa.getZoom() < ZOOM_MASSIMI) valori = massimiDeiVicini(valori, a.W, a.H);
+
+  // 2. i pixel: ogni quadrato è largo 4 pixel, e alto quanto vuole la proiezione
+  const ctx = a.tela.getContext("2d");
+  const img = ctx.createImageData(a.pxW, a.pxH);
+  for (let y = 0; y < a.pxH; y++) {
+    const riga = a.rigaDelPixel[y] * a.W;
+    for (let x = 0; x < a.pxW; x++) {
+      const v = valori[riga + Math.floor(x / PIXEL_PER_QUADRATO)];
+      if (v >= 0) img.data.set(TAVOLOZZA[Math.round(v)], (y * a.pxW + x) * 4);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // 3. la sfumatura (dove il browser non sa sfocare, resta l'immagine com'è)
+  const sfuma = a.sfumata.getContext("2d");
+  sfuma.clearRect(0, 0, a.pxW, a.pxH);
+  if ("filter" in sfuma) sfuma.filter = `blur(${PIXEL_PER_QUADRATO * 0.9}px)`;
+  sfuma.drawImage(a.tela, 0, 0);
+  sfuma.filter = "none";
+  a.sfumata.toBlob((blob) => {
+    if (!blob) return;
+    if (a.url) URL.revokeObjectURL(a.url);
+    a.url = URL.createObjectURL(blob);
+    a.immagine.setUrl(a.url);
+  });
 }
 
 function limitiDi(celle) {
@@ -984,6 +1109,7 @@ async function apriSchedaQuadrato(q) {
       <div class="punteggio">
         <span class="numero" style="color:${colore(p)}">${Math.round(p)}</span>
         <span class="giudizio">${giudizio(p)}</span>
+        ${etichettaTendenza(tendenza(q.cella, q.k))}
       </div>
       <dl>
         <dt>Ambienti</dt><dd>${ambienti || "n.d."}</dd>
@@ -1022,16 +1148,14 @@ function trovaPosizione() {
         L.circleMarker(punto, { radius: 7, color: "#fff", weight: 2, fillColor: "#1a73e8", fillOpacity: 1 }),
       ]).addTo(mappa);
 
-      const q = quadratoInPunto(punto);
-      if (!q) {
-        mappa.setView(punto, 12);
-        messaggio("Sei fuori dalle aree coperte da FungoMeter.");
-        return;
-      }
       document.getElementById("messaggio").hidden = true;
       if (stato.selezionando) impostaModalita(false);
-      mappa.once("moveend", () => apriSchedaQuadrato(q));
-      mappa.setView(punto, 14);
+      stato.posizione = punto;
+      stato.vicinoMostrato = 0;
+      aggiornaVicini();
+      // Inquadra te e i tre posti
+      const limiti = L.latLngBounds([punto, ...stato.vicini.map((v) => v.centro)]);
+      mappa.fitBounds(limiti, { padding: [40, 40], maxZoom: 14 });
     },
     (errore) => {
       const testi = {
@@ -1043,6 +1167,183 @@ function trovaPosizione() {
     },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
   );
+}
+
+// ---------------------------------------------------------------------------
+// I 3 posti migliori vicino a te
+// ---------------------------------------------------------------------------
+
+/** Distanza in km fra due punti (formula dell'emisenoverso). */
+function distanzaKm(a, b) {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLon = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+/** Direzione da a verso b, come "nord-est". */
+function direzione(a, b) {
+  const y = b.lat - a.lat, x = (b.lng - a.lng) * Math.cos(a.lat * Math.PI / 180);
+  const nomi = ["est", "nord-est", "nord", "nord-ovest", "ovest", "sud-ovest", "sud", "sud-est"];
+  const angolo = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  return nomi[Math.round(angolo / 45) % 8];
+}
+
+/**
+ * Sceglie i 3 posti (quadrati da 500 m) migliori per punteggio e distanza.
+ *   valore = punteggio / (1 + distanza / 15 km)
+ * Un posto a 15 km conta la metà di uno uguale vicinissimo. I tre posti
+ * distano almeno 1,5 km fra loro, così non sono tre quadrati attaccati.
+ */
+function calcolaVicini() {
+  const candidati = [];
+  stato.celle.forEach((cella) => {
+    for (let k = 0; k < N * N; k++) {
+      if (stato.statiche[cella.id][k * DATI_PER_QUADRATO] === VUOTO) continue;
+      const p = punteggioQuadrato(cella, k);
+      if (p < 5) continue;
+      const R = cella.riga * N + Math.floor(k / N), C = cella.colonna * N + (k % N);
+      const centro = L.latLngBounds(confiniQuadrato(cella.area, R, C)).getCenter();
+      const d = distanzaKm(stato.posizione, centro);
+      candidati.push({ q: { area: cella.area, R, C, cella, k }, centro, punteggio: p, distanza: d,
+                       valore: p / (1 + d / DISTANZA_META_KM) });
+    }
+  });
+  candidati.sort((a, b) => b.valore - a.valore);
+  const scelti = [];
+  for (const c of candidati) {
+    if (scelti.every((s) => distanzaKm(s.centro, c.centro) >= DISTANZA_MINIMA_KM)) scelti.push(c);
+    if (scelti.length === 3) break;
+  }
+  return scelti;
+}
+
+function preparaVicini() {
+  stato.stratoVicini = L.layerGroup().addTo(mappa);
+  document.getElementById("vicino-prima").addEventListener("click", () => mostraVicino(stato.vicinoMostrato - 1));
+  document.getElementById("vicino-dopo").addEventListener("click", () => mostraVicino(stato.vicinoMostrato + 1));
+  document.getElementById("vicino-vai").addEventListener("click", () => {
+    const v = stato.vicini[stato.vicinoMostrato];
+    if (!v) return;
+    mappa.once("moveend", () => apriSchedaQuadrato(v.q));
+    mappa.setView(v.centro, 15);
+  });
+  document.getElementById("vicini-chiudi").addEventListener("click", () => {
+    stato.posizione = null;
+    stato.vicini = [];
+    stato.stratoVicini.clearLayers();
+    document.getElementById("vicini").hidden = true;
+    document.querySelector(".contenitore-mappa").classList.remove("vicini-aperti");
+  });
+}
+
+/** Ricalcola i 3 posti (per esempio dopo un cambio di specie o di giorno). */
+function aggiornaVicini() {
+  stato.vicini = calcolaVicini();
+  const riquadro = document.getElementById("vicini");
+  riquadro.hidden = false;
+  document.querySelector(".contenitore-mappa").classList.add("vicini-aperti");
+  mostraVicino(Math.min(stato.vicinoMostrato, Math.max(0, stato.vicini.length - 1)));
+}
+
+function mostraVicino(i) {
+  const n = stato.vicini.length;
+  const testo = document.getElementById("vicino-testo");
+  if (!n) {
+    stato.stratoVicini.clearLayers();
+    testo.innerHTML = "Nessun posto favorevole per le specie e il giorno scelti.";
+    ["vicino-prima", "vicino-dopo", "vicino-vai"].forEach((id) => { document.getElementById(id).disabled = true; });
+    document.getElementById("vicino-indicazioni").hidden = true;
+    return;
+  }
+  stato.vicinoMostrato = (i + n) % n;   // le frecce girano in tondo
+  const v = stato.vicini[stato.vicinoMostrato];
+  testo.innerHTML = `
+    <span class="posizione-classifica">${stato.vicinoMostrato + 1} di ${n}</span>
+    <strong style="color:${colore(v.punteggio)}">${Math.round(v.punteggio)}</strong> ${giudizio(v.punteggio).toLowerCase()}
+    ${etichettaTendenza(tendenza(v.q.cella, v.q.k))}
+    · ${numero(v.distanza, 1)} km a ${direzione(stato.posizione, v.centro)}
+    <span class="luogo">${v.q.cella.zona}</span>`;
+  ["vicino-prima", "vicino-dopo"].forEach((id) => { document.getElementById(id).disabled = n < 2; });
+  document.getElementById("vicino-vai").disabled = false;
+  const link = document.getElementById("vicino-indicazioni");
+  link.hidden = false;
+  link.href = `https://www.google.com/maps/dir/?api=1&destination=${v.centro.lat.toFixed(5)},${v.centro.lng.toFixed(5)}`;
+
+  // Segnaposti numerati sulla mappa, quello mostrato più grande
+  stato.stratoVicini.clearLayers();
+  stato.vicini.forEach((w, j) => {
+    const icona = L.divIcon({
+      className: "",
+      html: `<div class="segnaposto${j === stato.vicinoMostrato ? " attivo" : ""}">${j + 1}</div>`,
+      iconSize: [28, 28], iconAnchor: [14, 14],
+    });
+    L.marker(w.centro, { icon: icona, keyboard: false })
+      .on("click", () => mostraVicino(j))
+      .addTo(stato.stratoVicini);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Migliori posti qui: i 5 quadrati migliori sullo schermo
+// ---------------------------------------------------------------------------
+
+const MIGLIORI_QUI = 5;
+const DISTANZA_MIGLIORI_KM = 1;   // i 5 posti distano almeno 1 km fra loro
+
+function preparaMiglioriQui() {
+  const pannello = document.getElementById("pannello-migliori");
+  document.getElementById("migliori-qui").addEventListener("click", () => {
+    if (pannello.hidden) mostraMiglioriQui(); else chiudiMiglioriQui();
+  });
+  document.getElementById("migliori-chiudi").addEventListener("click", chiudiMiglioriQui);
+}
+
+function chiudiMiglioriQui() {
+  document.getElementById("pannello-migliori").hidden = true;
+  document.getElementById("migliori-qui").setAttribute("aria-pressed", "false");
+}
+
+function mostraMiglioriQui() {
+  const pannello = document.getElementById("pannello-migliori");
+  pannello.hidden = false;
+  document.getElementById("migliori-qui").setAttribute("aria-pressed", "true");
+  document.getElementById("migliori-giorno").textContent = dataBreve(stato.punteggi.giorni[stato.giorno]);
+
+  const candidati = quadratiSulloSchermo()
+    .map((q) => ({ q, p: punteggioQuadrato(q.cella, q.k), centro: L.latLngBounds(confiniQuadrato(q.area, q.R, q.C)).getCenter() }))
+    .sort((a, b) => b.p - a.p);
+  const scelti = [];
+  for (const c of candidati) {
+    if (c.p < 1) break;
+    if (scelti.every((s) => distanzaKm(s.centro, c.centro) >= DISTANZA_MIGLIORI_KM)) scelti.push(c);
+    if (scelti.length === MIGLIORI_QUI) break;
+  }
+
+  const elenco = document.getElementById("elenco-migliori");
+  if (!scelti.length) {
+    elenco.innerHTML = `<li class="vuoto">Nessun posto favorevole sullo schermo per le specie e il giorno scelti.</li>`;
+    return;
+  }
+  elenco.innerHTML = scelti.map((c, i) => {
+    const distanza = stato.posizione ? ` · ${numero(distanzaKm(stato.posizione, c.centro), 1)} km da te` : "";
+    return `<li><button type="button" data-posto="${i}">
+        <span class="numero-posto">${i + 1}</span>
+        <span class="dettagli-posto">
+          <strong style="color:${colore(c.p)}">${Math.round(c.p)}</strong> ${giudizio(c.p).toLowerCase()}
+          ${etichettaTendenza(tendenza(c.q.cella, c.q.k))}${distanza}
+          <span class="luogo">${c.q.cella.zona}</span>
+        </span>
+      </button></li>`;
+  }).join("");
+  elenco.querySelectorAll("button[data-posto]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const c = scelti[Number(b.dataset.posto)];
+      chiudiMiglioriQui();
+      mappa.once("moveend", () => apriSchedaQuadrato(c.q));
+      mappa.setView(c.centro, Math.max(mappa.getZoom(), 15));
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------

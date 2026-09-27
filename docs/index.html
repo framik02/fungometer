@@ -79,6 +79,35 @@
       <span>Canaloni</span>
     </button>
 
+    <button type="button" id="migliori-qui" class="bottone-migliori" aria-pressed="false"
+            title="I 5 quadrati migliori sullo schermo nel giorno scelto">★ Migliori qui</button>
+
+    <!-- I 5 quadrati migliori sullo schermo -->
+    <div id="pannello-migliori" class="pannello-migliori" hidden>
+      <div class="intestazione-pannello">
+        <strong>Migliori qui</strong> <span id="migliori-giorno"></span>
+        <button type="button" id="migliori-chiudi" class="chiudi" aria-label="Chiudi">×</button>
+      </div>
+      <ol id="elenco-migliori" class="elenco-migliori"></ol>
+    </div>
+
+    <!-- I 3 posti migliori vicino a te (dopo "La mia posizione") -->
+    <div id="vicini" class="vicini" hidden>
+      <div class="intestazione-pannello">
+        <strong>Migliori vicino a te</strong>
+        <button type="button" id="vicini-chiudi" class="chiudi" aria-label="Chiudi">×</button>
+      </div>
+      <div class="vicini-riga">
+        <button type="button" id="vicino-prima" class="freccia" aria-label="Posto precedente">◀</button>
+        <div id="vicino-testo" class="vicino-testo"></div>
+        <button type="button" id="vicino-dopo" class="freccia" aria-label="Posto successivo">▶</button>
+      </div>
+      <div class="vicini-azioni">
+        <button type="button" id="vicino-vai" class="bottone-primario">Vai</button>
+        <a id="vicino-indicazioni" class="bottone-secondario" target="_blank" rel="noopener">Indicazioni</a>
+      </div>
+    </div>
+
     <!-- Modalità: Mappa (sposti e tocchi) o Seleziona (disegni la tua zona) -->
     <div class="modalita" role="group" aria-label="Modalità">
       <button type="button" id="modo-mappa" aria-pressed="true">Mappa</button>

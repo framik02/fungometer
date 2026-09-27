@@ -279,6 +279,9 @@ button, select { font: inherit; color: inherit; }
 .scheda-aperta .bottone-posizione,
 .scheda-aperta .bottone-canaloni,
 .scheda-aperta .modalita,
+.scheda-aperta .bottone-migliori,
+.scheda-aperta .vicini,
+.scheda-aperta .pannello-migliori,
 .scheda-aperta .leaflet-control-zoom { display: none; }
 
 .leaflet-popup-content { margin: 12px 14px; font-size: 0.9rem; line-height: 1.35; }
@@ -435,3 +438,95 @@ button, select { font: inherit; color: inherit; }
 /* In modalità Seleziona il dito disegna invece di spostare la mappa */
 .selezionando #mappa { cursor: crosshair; touch-action: none; }
 .selezionando .leaflet-container { touch-action: none !important; }
+
+/* Immagine morbida (da lontano): la sfumatura la fa già il disegno */
+.leaflet-image-layer.quadrati-morbidi { image-rendering: auto; }
+
+/* --- Tendenza -------------------------------------------------------- */
+
+.tendenza { font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+.tendenza.sale { color: #b3470f; }
+.tendenza.scende { color: #3a6ea5; }
+.tendenza.stabile { color: var(--testo-tenue); }
+.scheda .punteggio { flex-wrap: wrap; }
+
+/* --- Migliori qui ------------------------------------------------------ */
+
+.bottone-migliori {
+  position: absolute;
+  right: 12px;
+  bottom: 174px;
+  z-index: 800;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--superficie);
+  color: #9a5b00;
+  box-shadow: var(--ombra);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.bottone-migliori[aria-pressed="true"] { background: #9a5b00; color: #fff; }
+
+.pannello-migliori, .vicini {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 24px;
+  z-index: 900;
+  padding: 8px 10px 10px;
+  border-radius: 14px;
+  background: var(--superficie);
+  box-shadow: var(--ombra);
+  font-size: 0.9rem;
+}
+.pannello-migliori { z-index: 950; max-height: 55%; overflow-y: auto; }
+.intestazione-pannello { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.intestazione-pannello span { color: var(--testo-tenue); font-size: 0.8rem; }
+.intestazione-pannello .chiudi {
+  margin-left: auto; border: none; background: none; font-size: 1.4rem; line-height: 1;
+  color: var(--testo-tenue); cursor: pointer; padding: 0 4px;
+}
+.elenco-migliori { margin: 0; padding: 0; list-style: none; }
+.elenco-migliori li + li { border-top: 1px solid #eee7dc; }
+.elenco-migliori button {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 2px;
+  border: none; background: none; text-align: left; cursor: pointer;
+}
+.elenco-migliori .vuoto { padding: 8px 2px; color: var(--testo-tenue); }
+.numero-posto, .segnaposto {
+  flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--bosco); color: #fff; font-weight: 700; font-size: 0.85rem;
+}
+.luogo { display: block; font-size: 0.75rem; color: var(--testo-tenue); }
+
+/* --- Migliori vicino a te ------------------------------------------ */
+
+.vicini-riga { display: flex; align-items: center; gap: 8px; }
+.freccia {
+  flex: 0 0 auto; width: 36px; height: 36px; border: 1px solid var(--bordo); border-radius: 50%;
+  background: var(--superficie); color: var(--bosco); font-size: 0.9rem; cursor: pointer;
+}
+.freccia:disabled { opacity: 0.35; cursor: default; }
+.vicino-testo { flex: 1; min-width: 0; line-height: 1.35; }
+.posizione-classifica { display: block; font-size: 0.72rem; color: var(--testo-tenue); }
+.vicini-azioni { display: flex; gap: 8px; margin-top: 8px; }
+.vicini-azioni .bottone-primario { flex: 1; width: auto; padding: 8px; }
+.bottone-secondario {
+  flex: 1; padding: 8px; border: 1px solid var(--bosco); border-radius: var(--raggio);
+  color: var(--bosco); text-align: center; text-decoration: none; font-weight: 600;
+}
+.segnaposto { width: 24px; height: 24px; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.segnaposto.attivo { width: 28px; height: 28px; background: #9a5b00; }
+
+/* Con la scheda dei posti vicini aperta, i pulsanti salgono e la legenda si nasconde */
+.vicini-aperti .legenda { display: none; }
+.vicini-aperti .bottone-posizione { bottom: 190px; }
+.vicini-aperti .bottone-canaloni { bottom: 242px; }
+.vicini-aperti .bottone-migliori { bottom: 294px; }
+
+/* Schermi bassi: con i posti vicini aperti non c'è spazio per tutti i pulsanti */
+@media (max-height: 720px) {
+  .vicini-aperti .bottone-migliori, .vicini-aperti .bottone-canaloni { display: none; }
+}
