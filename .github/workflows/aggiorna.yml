@@ -30,6 +30,9 @@ jobs:
   aggiorna:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Mostra subito le stampe di Python nel log, invece che tutte alla fine
+      PYTHONUNBUFFERED: "1"
     steps:
       - name: Scarica il repository
         uses: actions/checkout@v7
