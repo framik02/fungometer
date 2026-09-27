@@ -19,7 +19,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-  <link rel="stylesheet" href="stile.css?v=6">
+  <link rel="stylesheet" href="stile.css?v=7">
 </head>
 <body>
   <header class="testata">
@@ -38,6 +38,18 @@
   <div id="avviso-vecchio" class="avviso-vecchio" hidden></div>
 
   <section class="comandi" aria-label="Scelta di specie e giorno">
+    <!-- Ricerca di un posto (con Nominatim di OpenStreetMap) -->
+    <form id="ricerca" class="ricerca" role="search">
+      <input id="testo-ricerca" type="search" placeholder="Cerca un posto: monte, paese, bosco…"
+             aria-label="Cerca un posto" autocomplete="off" enterkeyhint="search">
+      <button type="submit" aria-label="Cerca">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/>
+          <path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <ul id="risultati-ricerca" class="risultati-ricerca" hidden></ul>
+    </form>
     <div class="riga-comandi">
       <div class="campo">
         <span>Specie</span>
@@ -149,6 +161,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

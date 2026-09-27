@@ -107,6 +107,36 @@ button, select { font: inherit; color: inherit; }
   font-size: 1rem;
 }
 
+/* Ricerca di un posto */
+.ricerca { position: relative; display: flex; gap: 6px; margin-bottom: 8px; }
+.ricerca input {
+  flex: 1; min-width: 0; padding: 9px 12px;
+  border: 1px solid var(--bordo); border-radius: 999px; background: var(--sfondo);
+  font: inherit; color: var(--testo);
+}
+.ricerca button[type="submit"] {
+  flex: 0 0 auto; width: 42px; border: none; border-radius: 50%;
+  background: var(--bosco); color: #fff; display: grid; place-items: center; cursor: pointer;
+}
+.risultati-ricerca {
+  position: absolute; z-index: 1300; top: calc(100% + 4px); left: 0; right: 0;
+  margin: 0; padding: 4px 0; list-style: none; max-height: 60vh; overflow-y: auto;
+  border: 1px solid var(--bordo); border-radius: var(--raggio); background: var(--superficie); box-shadow: var(--ombra);
+}
+.risultati-ricerca li + li { border-top: 1px solid #eee7dc; }
+.risultati-ricerca .risultato { padding: 8px 12px; }
+.risultati-ricerca .nome-posto { font-weight: 600; }
+.risultati-ricerca .dove { display: block; font-size: 0.75rem; color: var(--testo-tenue); }
+.risultati-ricerca .valutazione { margin-top: 4px; font-size: 0.85rem; }
+.risultati-ricerca .azioni-risultato { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.risultati-ricerca .azioni-risultato button {
+  padding: 5px 10px; border: 1px solid var(--bosco); border-radius: 999px;
+  background: var(--superficie); color: var(--bosco); font-size: 0.8rem; font-weight: 600; cursor: pointer;
+}
+.risultati-ricerca .azioni-risultato button.principale { background: var(--bosco); color: #fff; }
+.risultati-ricerca .nota-ricerca { padding: 8px 12px; color: var(--testo-tenue); font-size: 0.85rem; }
+.risultati-ricerca .attribuzione { padding: 4px 12px; font-size: 0.7rem; color: var(--testo-tenue); text-align: right; }
+
 /* Scelta delle specie: riassunto che apre un pannello di caselle */
 .scelta-specie { position: relative; margin-top: 2px; }
 .scelta-specie summary {

@@ -359,6 +359,7 @@ async function avvia() {
   creaImmagini();
   preparaVicini();
   preparaMiglioriQui();
+  preparaRicerca();
 
   // Prima inquadratura: l'ultima area scelta, altrimenti tutte e due
   const area = ricordato("area");
@@ -1344,6 +1345,141 @@ function mostraMiglioriQui() {
       chiudiMiglioriQui();
       mappa.once("moveend", () => apriSchedaQuadrato(c.q));
       mappa.setView(c.centro, Math.max(mappa.getZoom(), 15));
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Ricerca di un posto: è buono o no?
+// ---------------------------------------------------------------------------
+
+const RAGGIO_RICERCA_KM = 3;   // si cerca anche il quadrato migliore entro questa distanza
+let segnaRicerca = null;
+
+/** I nomi arrivano da un servizio esterno: niente HTML dentro. */
+function testoSicuro(t) {
+  return String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/** Il quadrato migliore entro `km` da un punto, per il giorno scelto; null se non ce ne sono. */
+function migliorEntro(punto, km) {
+  let migliore = null;
+  stato.celle.forEach((cella) => {
+    const centroCella = L.latLng((cella.bbox[0] + cella.bbox[2]) / 2, (cella.bbox[1] + cella.bbox[3]) / 2);
+    if (distanzaKm(punto, centroCella) > km + 2.5) return;   // cella troppo lontana
+    for (let k = 0; k < N * N; k++) {
+      if (stato.statiche[cella.id][k * DATI_PER_QUADRATO] === VUOTO) continue;
+      const R = cella.riga * N + Math.floor(k / N), C = cella.colonna * N + (k % N);
+      const centro = L.latLngBounds(confiniQuadrato(cella.area, R, C)).getCenter();
+      const d = distanzaKm(punto, centro);
+      if (d > km) continue;
+      const p = punteggioQuadrato(cella, k);
+      if (!migliore || p > migliore.punteggio) {
+        migliore = { q: { area: cella.area, R, C, cella, k }, centro, punteggio: p, distanza: d };
+      }
+    }
+  });
+  return migliore;
+}
+
+function preparaRicerca() {
+  const modulo = document.getElementById("ricerca");
+  const campo = document.getElementById("testo-ricerca");
+  const elenco = document.getElementById("risultati-ricerca");
+  modulo.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const testo = campo.value.trim();
+    if (testo.length >= 2) cercaPosto(testo);
+  });
+  // L'elenco si chiude toccando fuori o cancellando il testo
+  document.addEventListener("click", (ev) => { if (!modulo.contains(ev.target)) elenco.hidden = true; });
+  campo.addEventListener("input", () => { if (!campo.value) elenco.hidden = true; });
+}
+
+/**
+ * Cerca il posto con Nominatim (OpenStreetMap). La ricerca parte solo quando
+ * premi invio o la lente: le regole di Nominatim vietano le ricerche a ogni
+ * lettera digitata. Si cerca in Italia, preferendo le nostre aree.
+ */
+async function cercaPosto(testo) {
+  const elenco = document.getElementById("risultati-ricerca");
+  elenco.hidden = false;
+  elenco.innerHTML = `<li class="nota-ricerca">Cerco "${testo.replace(/</g, "&lt;")}"…</li>`;
+  const limiti = limitiDi(stato.celle).pad(0.1);
+  const parametri = new URLSearchParams({
+    format: "jsonv2", q: testo, countrycodes: "it", limit: "5", "accept-language": "it",
+    viewbox: [limiti.getWest(), limiti.getNorth(), limiti.getEast(), limiti.getSouth()].map((v) => v.toFixed(3)).join(","),
+  });
+  let risultati;
+  try {
+    const risposta = await fetch(`https://nominatim.openstreetmap.org/search?${parametri}`);
+    if (!risposta.ok) throw new Error(risposta.status);
+    risultati = await risposta.json();
+  } catch (errore) {
+    elenco.innerHTML = `<li class="nota-ricerca">La ricerca non risponde. Controlla la connessione e riprova.</li>`;
+    return;
+  }
+  if (!risultati.length) {
+    elenco.innerHTML = `<li class="nota-ricerca">Nessun posto trovato. Prova con un nome diverso.</li>`;
+    return;
+  }
+
+  const giorno = dataBreve(stato.punteggi.giorni[stato.giorno]);
+  const voci = risultati.map((r) => {
+    const punto = L.latLng(Number(r.lat), Number(r.lon));
+    const qui = quadratoInPunto(punto);
+    const migliore = migliorEntro(punto, RAGGIO_RICERCA_KM);
+    return { r, punto, qui, pQui: qui ? punteggioQuadrato(qui.cella, qui.k) : null, migliore };
+  });
+
+  elenco.innerHTML = voci.map((v, i) => {
+    const dove = testoSicuro(v.r.display_name.split(", ").slice(1, 4).join(", "));
+    let valutazione;
+    if (!v.qui && !v.migliore) {
+      valutazione = "Fuori dalle aree coperte da FungoMeter.";
+    } else {
+      const parti = [];
+      if (v.qui) {
+        parti.push(`Qui: <strong style="color:${colore(v.pQui)}">${Math.round(v.pQui)}</strong> ${giudizio(v.pQui).toLowerCase()} ` +
+                   etichettaTendenza(tendenza(v.qui.cella, v.qui.k)));
+      } else {
+        parti.push("Il punto esatto è fuori dalle aree coperte.");
+      }
+      if (v.migliore && (!v.qui || v.migliore.punteggio > v.pQui + 2)) {
+        parti.push(`Entro ${RAGGIO_RICERCA_KM} km il migliore: <strong style="color:${colore(v.migliore.punteggio)}">` +
+                   `${Math.round(v.migliore.punteggio)}</strong> a ${numero(v.migliore.distanza, 1)} km verso ${direzione(v.punto, v.migliore.centro)}`);
+      }
+      valutazione = parti.join("<br>");
+    }
+    const azioni = [];
+    if (v.qui) azioni.push(`<button type="button" class="principale" data-azione="qui" data-i="${i}">Vedi il posto</button>`);
+    else azioni.push(`<button type="button" class="principale" data-azione="posto" data-i="${i}">Vai sulla mappa</button>`);
+    if (v.migliore && (!v.qui || v.migliore.punteggio > v.pQui + 2)) {
+      azioni.push(`<button type="button" data-azione="migliore" data-i="${i}">Vai al migliore vicino</button>`);
+    }
+    return `<li class="risultato">
+        <span class="nome-posto">${testoSicuro(v.r.name || v.r.display_name.split(",")[0])}</span>
+        <span class="dove">${dove}</span>
+        <div class="valutazione">${valutazione}</div>
+        <div class="azioni-risultato">${azioni.join("")}</div>
+      </li>`;
+  }).join("") + `<li class="attribuzione">${giorno} · ricerca © OpenStreetMap</li>`;
+
+  elenco.querySelectorAll("button[data-azione]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const v = voci[Number(b.dataset.i)];
+      elenco.hidden = true;
+      document.getElementById("testo-ricerca").blur();
+      if (segnaRicerca) segnaRicerca.remove();
+      segnaRicerca = L.marker(v.punto, { title: v.r.name || "" }).addTo(mappa);
+      if (stato.selezionando) impostaModalita(false);
+      const bersaglio = b.dataset.azione === "migliore" ? v.migliore.q : b.dataset.azione === "qui" ? v.qui : null;
+      const centro = b.dataset.azione === "migliore" ? v.migliore.centro : v.punto;
+      const zoom = Math.max(mappa.getZoom(), 14);
+      const giaLi = mappa.getCenter().distanceTo(centro) < 5 && mappa.getZoom() === zoom;
+      if (bersaglio && giaLi) apriSchedaQuadrato(bersaglio);
+      else if (bersaglio) mappa.once("moveend", () => apriSchedaQuadrato(bersaglio));
+      mappa.setView(centro, zoom);
     });
   });
 }
