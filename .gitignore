@@ -1,0 +1,17 @@
+# Raster grezzi: DEM e Corine sono pesanti e si riscaricano (vedi README)
+data/raw/
+
+# File di prova di prepare_static.py --senza-corine
+data/celle_prova.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Sistema
+Thumbs.db
+Desktop.ini
+.DS_Store
+output/

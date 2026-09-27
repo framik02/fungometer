@@ -1,0 +1,5 @@
+# Dipendenze dello script giornaliero (quelle che installa GitHub Actions)
+requests>=2.31
+PyYAML>=6.0
+# Fusi orari: su Windows Python non li ha di suo
+tzdata; sys_platform == "win32"

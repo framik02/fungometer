@@ -1,0 +1,117 @@
+# Parametri del punteggio di FungoMeter.
+#
+# Punteggio S = 100 x f_pioggia x f_temperatura x f_habitat x f_stagione x f_quota
+# Ogni fattore vale fra 0 e 1. Qui sotto si cambiano soglie e intervalli:
+# dopo una modifica basta aspettare l'aggiornamento del mattino (o lanciare
+# scripts/aggiorna_punteggi.py a mano).
+
+# ---------------------------------------------------------------------------
+# Regole comuni a tutte le specie
+# ---------------------------------------------------------------------------
+comune:
+  pioggia:
+    giorni: 14                  # si somma la pioggia di 14 giorni...
+    ritardo: 3                  # ...che finiscono 3 giorni prima: i funghi escono dopo la pioggia,
+                                # non lo stesso giorno (con 3: da 17 a 3 giorni prima)
+    bonus_suolo: 0.10           # +10% se il suolo è umido...
+    soglia_suolo: 0.30          # ...cioè umidità media 0-7 cm (m3/m3) almeno questa
+    giorni_suolo: 3             # media dell'umidità sugli ultimi N giorni
+  temperatura:
+    giorni_media: 7             # temperatura di riferimento = media delle medie degli ultimi N giorni
+    rampa: 4                    # gradi fuori dall'intervallo ideale prima di arrivare a 0
+    bonus_calo: 0.10            # +10% se dopo una pioggia la temperatura cala
+    pioggia_minima_calo: 10     # mm in un giorno per contare come "pioggia"
+    calo_minimo: 3              # gradi di calo (3 giorni dopo contro 3 giorni prima)
+    cerca_da_giorni: 10         # la pioggia deve essere caduta fra 10...
+    cerca_fino_a_giorni: 2      # ...e 2 giorni prima
+  habitat:
+    peso_parziale: 0.3          # valore per le classi "parziali" (es. bosco misto)
+    quota_minima_cella: 15      # una classe conta se copre almeno il 15% della cella
+  quota:
+    rampa: 200                  # metri fuori dalla fascia ideale prima di arrivare a 0
+  stagione:
+    peso_margine: 0.5           # valore nei mesi di margine
+
+# Promemoria classi Corine usate:
+#   222 castagneti da frutto        311 boschi di latifoglie (querce, castagni, faggi)
+#   312 boschi di conifere (pini, abeti)   313 boschi misti
+#   231 prati stabili e pascoli     321 aree a pascolo naturale e praterie
+#   322 brughiere e cespuglieti     324 aree a vegetazione boschiva e arbustiva in evoluzione
+#   243 aree agricole con spazi naturali importanti
+#   211 seminativi   242 colture complesse
+
+# ---------------------------------------------------------------------------
+# Specie (mesi: 1 = gennaio ... 12 = dicembre)
+# ---------------------------------------------------------------------------
+specie:
+  porcini_estivi:
+    nome: "Porcini estivi e neri"
+    latino: "Boletus reticulatus, B. aereus"
+    ambiente: "quercia, castagno, faggio"
+    mesi_centrali: [6, 7, 8, 9]
+    mesi_margine: [5, 10]
+    quota: [200, 1200]
+    pioggia_mm: 30
+    temperatura: [16, 24]
+    habitat:
+      adatte: [311, 222]
+      parziali: [313]
+
+  porcini_autunnali:
+    nome: "Porcini autunnali"
+    latino: "Boletus edulis, B. pinophilus"
+    ambiente: "faggio, castagno, abete, pino"
+    mesi_centrali: [10]
+    mesi_margine: [9, 11]
+    quota: [600, 1800]
+    pioggia_mm: 40
+    temperatura: [10, 18]
+    habitat:
+      # Faggio con abete è l'habitat tipico: qui il bosco misto vale 1.
+      adatte: [311, 312, 313, 222]
+      parziali: []
+
+  ovolo:
+    nome: "Ovolo buono"
+    latino: "Amanita caesarea"
+    ambiente: "quercia, castagno"
+    mesi_centrali: [8, 9]
+    mesi_margine: [7, 10]
+    quota: [200, 1000]
+    pioggia_mm: 30
+    temperatura: [18, 26]
+    habitat:
+      adatte: [311, 222]
+      parziali: [313]
+
+  galletto:
+    nome: "Galletto"
+    latino: "Cantharellus cibarius"
+    ambiente: "faggio, quercia, castagno"
+    mesi_centrali: [7, 8, 9]
+    mesi_margine: [6, 10]
+    quota: [200, 1500]
+    pioggia_mm: 30
+    temperatura: [14, 22]
+    habitat:
+      adatte: [311, 222]
+      parziali: [313]
+
+  mazza_di_tamburo:
+    nome: "Mazza di tamburo"
+    latino: "Macrolepiota procera"
+    ambiente: "radure, pascoli, margini del bosco"
+    mesi_centrali: [9, 10]
+    mesi_margine: [8, 11]
+    quota: [0, 1500]
+    pioggia_mm: 25
+    temperatura: [12, 22]
+    habitat:
+      adatte: [231, 321, 322, 324, 243]
+      parziali: [311, 312, 313]
+      # Margine del bosco: Corine non lo vede, quindi lo deduciamo.
+      # Una cella con almeno il 15% di bosco E almeno il 15% di spazi aperti
+      # vale 1, perché lì ci sono per forza dei margini.
+      margine:
+        bosco: [311, 312, 313]
+        aperto: [211, 231, 242, 243, 321, 322, 324]

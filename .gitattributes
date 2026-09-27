@@ -1,0 +1,2 @@
+# Fine riga Unix per tutti i file di testo (Windows e GitHub Actions scrivono uguale)
+* text=auto eol=lf

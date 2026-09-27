@@ -1,0 +1,91 @@
+# Aree coperte da FungoMeter.
+#
+# Ogni area ha una sua griglia di celle quadrate da `lato_cella_km`.
+# Dentro un'area ci sono una o più "zone": rettangoli in gradi decimali
+# (sud/nord = latitudine, ovest/est = longitudine).
+# Una cella entra nella mappa se il suo centro cade in almeno una zona.
+# Le zone possono sovrapporsi: le celle in comune vengono contate una volta sola.
+#
+# Per aggiungere una zona basta copiare un blocco e cambiare i numeri.
+# Le coordinate si leggono facilmente da openstreetmap.org (tasto destro, "Mostra indirizzo").
+
+lato_cella_km: 3
+
+aree:
+  foligno:
+    nome: "Dintorni di Foligno"
+    zone:
+      - nome: "Monte Subasio e colline di Foligno"
+        sud: 42.90
+        nord: 43.12
+        ovest: 12.55
+        est: 12.80
+      - nome: "Altopiano di Colfiorito e montagna folignate"
+        sud: 42.85
+        nord: 43.12
+        ovest: 12.78
+        est: 13.00
+      - nome: "Monti Martani"
+        sud: 42.70
+        nord: 42.92
+        ovest: 12.42
+        est: 12.62
+      - nome: "Monte Cucco, Gualdo Tadino e Nocera Umbra"
+        sud: 43.12
+        nord: 43.42
+        ovest: 12.62
+        est: 12.85
+      - nome: "Valnerina e Monteluco di Spoleto"
+        sud: 42.65
+        nord: 42.90
+        ovest: 12.72
+        est: 13.00
+      - nome: "Sibillini: Norcia, Castelluccio, Forca Canapine, Visso"
+        sud: 42.70
+        nord: 42.98
+        ovest: 13.00
+        est: 13.25
+
+  roma:
+    nome: "Dintorni di Roma"
+    zone:
+      - nome: "Castelli Romani"
+        sud: 41.65
+        nord: 41.82
+        ovest: 12.58
+        est: 12.80
+      - nome: "Monti della Tolfa e Monti Sabatini (Manziana, Bracciano)"
+        sud: 42.03
+        nord: 42.27
+        ovest: 11.78
+        est: 12.30
+      - nome: "Monti Cimini e Lago di Vico"
+        sud: 42.28
+        nord: 42.50
+        ovest: 12.05
+        est: 12.30
+      - nome: "Monti Sabini"
+        sud: 42.12
+        nord: 42.42
+        ovest: 12.58
+        est: 12.92
+      - nome: "Monti Lucretili"
+        sud: 42.00
+        nord: 42.15
+        ovest: 12.75
+        est: 12.95
+      - nome: "Monti Prenestini e Simbruini (Subiaco, Livata, Jenne, Filettino)"
+        sud: 41.80
+        nord: 42.05
+        ovest: 12.88
+        est: 13.35
+      - nome: "Monti Lepini (Carpineto, Semprevisa, Segni)"
+        sud: 41.55
+        nord: 41.72
+        ovest: 12.95
+        est: 13.20
+      - nome: "Terminillo e Monti Reatini"
+        sud: 42.38
+        nord: 42.58
+        ovest: 12.88
+        est: 13.10
