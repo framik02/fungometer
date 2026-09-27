@@ -33,8 +33,13 @@ VARIABILI = {
 CELLE_PER_LOTTO = 50
 PAUSA_FRA_LOTTI = 12  # secondi: 50 celle x 1,8 = 90 chiamate ogni 12 s, cioè 450 al minuto (limite 600)
 
+# Di solito Open-Meteo risponde in circa un secondo. Ogni tanto una richiesta
+# resta appesa senza risposta: meglio abbandonarla presto e riprovare.
+ATTESA_CONNESSIONE = 10  # secondi per aprire la connessione
+ATTESA_RISPOSTA = 30     # secondi per ricevere la risposta
 
-def _chiedi(url, parametri, tentativi=5):
+
+def _chiedi(url, parametri, tentativi=6):
     """Fa una richiesta GET con tentativi ripetuti.
 
     - errore 429 (troppe richieste): aspetta un minuto e riprova;
@@ -43,7 +48,9 @@ def _chiedi(url, parametri, tentativi=5):
     """
     for tentativo in range(1, tentativi + 1):
         try:
-            risposta = requests.get(url, params=parametri, timeout=60)
+            risposta = requests.get(
+                url, params=parametri, timeout=(ATTESA_CONNESSIONE, ATTESA_RISPOSTA)
+            )
             if risposta.status_code == 429:
                 print(f"  troppe richieste, aspetto 60 s (tentativo {tentativo})")
                 time.sleep(60)
@@ -56,7 +63,7 @@ def _chiedi(url, parametri, tentativi=5):
             # con più località una lista: la rendiamo sempre una lista.
             return dati if isinstance(dati, list) else [dati]
         except requests.RequestException as errore:
-            attesa = 10 * tentativo
+            attesa = 5 * tentativo
             print(f"  errore di rete ({errore}), riprovo fra {attesa} s")
             time.sleep(attesa)
     raise RuntimeError(f"Open-Meteo non risponde dopo {tentativi} tentativi")
@@ -96,7 +103,9 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
         else:
             parametri.update(past_days=past_days, forecast_days=forecast_days)
 
+        partenza = time.monotonic()
         risultati = _chiedi(url, parametri)
+        durata = time.monotonic() - partenza
         if len(risultati) != len(lotto):
             raise RuntimeError("Open-Meteo ha restituito un numero sbagliato di località")
 
@@ -109,7 +118,7 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
                 for lungo, corto in VARIABILI.items()
             }
 
-        print(f"  meteo: lotto {n}/{len(lotti)}")
+        print(f"  meteo: lotto {n}/{len(lotti)} in {durata:.1f} s")
         if n < len(lotti):
             time.sleep(PAUSA_FRA_LOTTI)
 
