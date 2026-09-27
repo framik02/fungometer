@@ -5,7 +5,7 @@ Per ogni sottocella da 500 m:
 
 - acqua e temperatura dipendono dal meteo della cella da 3 km (e dal giorno);
 - habitat, quota e terreno dipendono dalla sottocella (e non cambiano);
-- stagione dipende solo dal mese.
+- stagione dipende solo dalla data.
 
 Ogni funzione qui sotto calcola UN fattore fra 0 e 1. Sono funzioni "pure":
 ricevono numeri e restituiscono numeri, senza leggere file né internet.
@@ -18,6 +18,7 @@ lunghe uguali e nello stesso ordine di date:
 """
 
 import math
+from datetime import date
 
 import yaml
 
@@ -133,13 +134,49 @@ def fattore_temperatura(meteo, i, specie, regole):
     return fattore, t_rif
 
 
-def fattore_stagione(mese, mesi_centrali, mesi_margine, regole):
-    """1 nei mesi centrali, 0,5 in quelli di margine, 0 fuori stagione."""
-    if mese in mesi_centrali:
+def _primo_del_mese(anno, mese):
+    """Primo giorno del mese; accetta anche mesi oltre dicembre o prima di gennaio."""
+    anno += (mese - 1) // 12
+    return date(anno, (mese - 1) % 12 + 1, 1)
+
+
+def fattore_stagione(giorno, mesi_centrali, mesi_margine):
+    """Quanto il giorno è dentro la stagione della specie, in modo graduale.
+
+    - nei mesi centrali vale 1;
+    - nei mesi di margine sale (prima della stagione) o scende (dopo) in linea
+      retta: per i porcini estivi, con ottobre di margine, vale circa 1 il
+      1° ottobre, 0,5 a metà mese e quasi 0 il 31;
+    - fuori vale 0.
+    In media un mese di margine vale 0,5, ma senza salti da un giorno all'altro.
+    `giorno` è una data (datetime.date).
+    """
+    if not mesi_centrali:
+        return 0.0
+    anno = giorno.year
+    primo, ultimo = min(mesi_centrali), max(mesi_centrali)
+    inizio = _primo_del_mese(anno, primo)          # primo giorno della stagione piena
+    fine = _primo_del_mese(anno, ultimo + 1)       # primo giorno dopo la stagione piena
+    if inizio <= giorno < fine:
         return 1.0
-    if mese in mesi_margine:
-        return regole["peso_margine"]
-    return 0.0
+
+    # Quanti mesi di margine ci sono subito prima e subito dopo
+    prima = 0
+    while (primo - prima - 1 - 1) % 12 + 1 in mesi_margine and prima < 12:
+        prima += 1
+    dopo = 0
+    while (ultimo + dopo) % 12 + 1 in mesi_margine and dopo < 12:
+        dopo += 1
+
+    if giorno < inizio:
+        if not prima:
+            return 0.0
+        partenza = _primo_del_mese(anno, primo - prima)
+        return max(0.0, min(1.0, (giorno - partenza).days / (inizio - partenza).days))
+    if not dopo:
+        return 0.0
+    arrivo = _primo_del_mese(anno, ultimo + 1 + dopo)
+    return max(0.0, min(1.0, (arrivo - giorno).days / (arrivo - fine).days))
 
 
 # ---------------------------------------------------------------------------
@@ -217,12 +254,14 @@ def fattori_statici(sottocella, specie, comune):
     }
 
 
-def fattori_meteo(meteo, i, mese, specie, comune):
-    """Acqua, temperatura e stagione di una cella per un giorno e una specie."""
+def fattori_meteo(meteo, i, giorno, specie, comune):
+    """Acqua, temperatura e stagione di una cella per un giorno e una specie.
+
+    `giorno` è la data (datetime.date) corrispondente alla posizione i.
+    """
     f_acqua, pioggia, suolo, caldo = fattore_acqua(meteo, i, specie["pioggia_mm"], comune["acqua"])
     f_temp, t_rif = fattore_temperatura(meteo, i, specie, comune["temperatura"])
-    f_stagione = fattore_stagione(mese, specie["mesi_centrali"], specie["mesi_margine"],
-                                  comune["stagione"])
+    f_stagione = fattore_stagione(giorno, specie["mesi_centrali"], specie["mesi_margine"])
     return {
         "acqua": f_acqua, "temperatura": f_temp, "stagione": f_stagione,
         "pioggia_mm": pioggia, "suolo": suolo, "caldo": caldo, "t_rif": t_rif,

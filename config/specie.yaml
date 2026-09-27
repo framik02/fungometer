@@ -58,8 +58,6 @@ comune:
     # Quando l'acqua è al massimo, la differenza fra le forme si dimezza:
     # con tanta pioggia anche creste e versanti a sud vanno bene.
     effetto_se_bagnato: 0.5
-  stagione:
-    peso_margine: 0.5           # valore nei mesi di margine
   cella:
     quota_migliori: 25          # punteggio della cella = media del 25% di sottocelle migliori
 
@@ -78,6 +76,8 @@ comune:
 
 # ---------------------------------------------------------------------------
 # Specie (mesi: 1 = gennaio ... 12 = dicembre)
+# Stagione: 1 nei mesi centrali; nei mesi di margine sale o scende in modo
+# graduale giorno per giorno (per esempio da 1 il primo ottobre a 0 il 31).
 # ---------------------------------------------------------------------------
 specie:
   porcini_estivi:

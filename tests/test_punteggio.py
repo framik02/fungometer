@@ -8,6 +8,7 @@ già il risultato giusto, e controlla che il codice lo ritrovi.
 """
 
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -203,12 +204,39 @@ def test_mazza_di_tamburo_margine_del_bosco():
 
 # --- stagione, quota, terreno ----------------------------------------------
 
+def stagione(sp, giorno):
+    return fattore_stagione(giorno, sp["mesi_centrali"], sp["mesi_margine"])
+
+
 def test_stagione_porcini_estivi():
+    sp = SPECIE["porcini_estivi"]      # centrali giugno-settembre, margine maggio e ottobre
+    assert stagione(sp, date(2026, 1, 15)) == 0
+    assert stagione(sp, date(2026, 5, 1)) == 0               # inizio del margine
+    assert stagione(sp, date(2026, 5, 16)) == pytest.approx(15 / 31)
+    assert stagione(sp, date(2026, 6, 1)) == 1
+    assert stagione(sp, date(2026, 9, 30)) == 1
+    assert stagione(sp, date(2026, 10, 1)) == 1               # nessun salto il primo ottobre
+    assert stagione(sp, date(2026, 10, 16)) == pytest.approx(16 / 31)
+    assert stagione(sp, date(2026, 10, 31)) == pytest.approx(1 / 31)
+    assert stagione(sp, date(2026, 11, 1)) == 0
+
+
+def test_stagione_senza_salti():
+    """Da un giorno all'altro la stagione cambia al massimo di 1/28."""
+    for sp in SPECIE.values():
+        giorno, prima = date(2026, 1, 1), None
+        while giorno.year == 2026:
+            valore = stagione(sp, giorno)
+            if prima is not None:
+                assert abs(valore - prima) <= 1 / 28 + 1e-9, (sp["nome"], giorno)
+            prima = valore
+            giorno = date.fromordinal(giorno.toordinal() + 1)
+
+
+def test_stagione_media_del_margine_circa_meta():
     sp = SPECIE["porcini_estivi"]
-    valori = [fattore_stagione(m, sp["mesi_centrali"], sp["mesi_margine"], COMUNE["stagione"])
-              for m in range(1, 13)]
-    #          gen feb mar apr mag  giu  lug  ago  set  ott  nov dic
-    assert valori == [0, 0, 0, 0, 0.5, 1, 1, 1, 1, 0.5, 0, 0]
+    ottobre = [stagione(sp, date(2026, 10, g)) for g in range(1, 32)]
+    assert sum(ottobre) / 31 == pytest.approx(0.5, abs=0.02)
 
 
 def test_quota_percentili():
@@ -240,14 +268,14 @@ SOTTOCELLA_FAGGETA = {"h": {"t1": 90, "c231": 10}, "q": [900, 1000, 1100], "m": 
 def test_punteggio_condizioni_perfette_fa_100():
     sp = SPECIE["porcini_autunnali"]
     statici = fattori_statici(SOTTOCELLA_FAGGETA, sp, COMUNE)
-    mf = fattori_meteo(meteo_costante(pioggia=5, tmed=13, suolo=0.35), 30, 10, sp, COMUNE)
+    mf = fattori_meteo(meteo_costante(pioggia=5, tmed=13, suolo=0.35), 30, date(2026, 10, 15), sp, COMUNE)
     assert punteggio(mf, statici, COMUNE) == pytest.approx(100)
 
 
 def test_punteggio_fuori_stagione_fa_zero():
     sp = SPECIE["porcini_autunnali"]
     statici = fattori_statici(SOTTOCELLA_FAGGETA, sp, COMUNE)
-    mf = fattori_meteo(meteo_costante(pioggia=5, tmed=13, suolo=0.35), 30, 1, sp, COMUNE)
+    mf = fattori_meteo(meteo_costante(pioggia=5, tmed=13, suolo=0.35), 30, date(2026, 1, 15), sp, COMUNE)
     assert punteggio(mf, statici, COMUNE) == 0
 
 
@@ -255,10 +283,10 @@ def test_punteggio_e_il_prodotto_dei_fattori():
     sp = SPECIE["porcini_autunnali"]
     sottocella = {"h": {"t3": 100}, "q": [900, 1000, 1100], "m": {"cr": 100}}  # cerreta, cresta
     statici = fattori_statici(sottocella, sp, COMUNE)
-    mf = fattori_meteo(meteo_costante(pioggia=5, tmed=13, suolo=0.35), 30, 11, sp, COMUNE)
-    # acqua 1, temperatura 1, stagione 0,5 (novembre), habitat 0,3, quota 1,
+    mf = fattori_meteo(meteo_costante(pioggia=5, tmed=13, suolo=0.35), 30, date(2026, 11, 16), sp, COMUNE)
+    # acqua 1, temperatura 1, stagione 0,5 (metà novembre), habitat 0,3, quota 1,
     # terreno: cresta 0,8, ma con acqua piena vale 0,9
-    assert punteggio(mf, statici, COMUNE) == pytest.approx(100 * 0.5 * 0.3 * 0.9)
+    assert punteggio(mf, statici, COMUNE) == pytest.approx(100 * (15 / 30) * 0.3 * 0.9)
 
 
 def test_punteggio_cella_media_delle_migliori():

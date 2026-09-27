@@ -49,6 +49,7 @@ from fungometer.griglia import SOTTOCELLE_PER_LATO  # noqa: E402
 from fungometer.meteo import scarica_meteo  # noqa: E402
 from fungometer.punteggio import (  # noqa: E402
     carica_specie,
+    fattore_stagione,
     fattori_meteo,
     fattori_statici,
     punteggio,
@@ -91,7 +92,7 @@ def calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni):
     comune = config["comune"]
     specie = config["specie"]
     indici = [date_meteo.index(g) for g in giorni]
-    mesi = [date.fromisoformat(g).month for g in giorni]
+    date_giorni = [date.fromisoformat(g) for g in giorni]
 
     uscita_specie = []
     for codice, sp in specie.items():
@@ -108,9 +109,8 @@ def calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni):
             "temperatura": sp["temperatura"],
             "temperatura_ottimale": sp.get("temperatura_ottimale"),
             "stagione": [
-                _cento(1 if m in sp["mesi_centrali"] else comune["stagione"]["peso_margine"]
-                       if m in sp["mesi_margine"] else 0)
-                for m in mesi
+                _cento(fattore_stagione(d, sp["mesi_centrali"], sp["mesi_margine"]))
+                for d in date_giorni
             ],
         })
 
@@ -126,8 +126,8 @@ def calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni):
         sottocelle = [s for s in statici[cella["id"]] if s is not None]
         for codice, sp in specie.items():
             S, fa, ft = [], [], []
-            for i, m in zip(indici, mesi):
-                mf = fattori_meteo(meteo, i, m, sp, comune)
+            for i, d in zip(indici, date_giorni):
+                mf = fattori_meteo(meteo, i, d, sp, comune)
                 punti = [punteggio(mf, s[codice], comune) for s in sottocelle]
                 S.append(round(punteggio_cella(punti, comune)))
                 fa.append(_cento(mf["acqua"]))
