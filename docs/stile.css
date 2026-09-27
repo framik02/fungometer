@@ -204,6 +204,11 @@ button, select { font: inherit; color: inherit; }
 
 /* --- Scheda della cella (popup Leaflet) -------------------------------- */
 
+/* Quando la scheda è aperta, via ciò che la coprirebbe */
+.scheda-aperta .legenda,
+.scheda-aperta .bottone-posizione,
+.scheda-aperta .leaflet-control-zoom { display: none; }
+
 .leaflet-popup-content { margin: 12px 14px; font-size: 0.9rem; line-height: 1.35; }
 .scheda h3 { margin: 0 0 2px; font-size: 1rem; }
 .scheda .zona { color: var(--testo-tenue); font-size: 0.8rem; margin-bottom: 8px; }
@@ -256,6 +261,7 @@ button, select { font: inherit; color: inherit; }
 .lista-avvertenze li { margin-bottom: 8px; }
 .lista-avvertenze ul { margin: 4px 0 0; padding-left: 18px; }
 .lista-avvertenze a { color: var(--bosco); font-weight: 600; }
+.lista-avvertenze a[href^="tel:"] { white-space: nowrap; }
 
 .bottone-primario {
   width: 100%;

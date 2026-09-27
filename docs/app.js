@@ -255,6 +255,12 @@ function preparaMappa() {
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' +
       ' | Meteo <a href="https://open-meteo.com/">Open-Meteo</a>',
   }).addTo(mappa);
+
+  // Con una scheda aperta nascondiamo legenda, pulsante GPS e zoom:
+  // sui telefoni piccoli coprirebbero la scheda.
+  const contenitore = document.querySelector(".contenitore-mappa");
+  mappa.on("popupopen", () => contenitore.classList.add("scheda-aperta"));
+  mappa.on("popupclose", () => contenitore.classList.remove("scheda-aperta"));
 }
 
 function disegnaCelle() {
@@ -369,7 +375,9 @@ function apriScheda(cella, rettangolo) {
       <p class="nota">La pioggia conta i ${regole.giorni_pioggia} giorni che finiscono ${regole.ritardo_pioggia} giorni prima, perché i funghi escono dopo. <a href="info.html">Come si calcola</a></p>
     </div>`;
 
-  rettangolo.bindPopup(html, { maxWidth: 300, autoPanPadding: [16, 16] }).openPopup();
+  // Altezza massima: la scheda non esce mai dalla mappa, al massimo scorre
+  const altezzaMax = Math.max(180, mappa.getSize().y - 100);
+  rettangolo.bindPopup(html, { maxWidth: 300, maxHeight: altezzaMax, autoPanPadding: [16, 16] }).openPopup();
 }
 
 // ---------------------------------------------------------------------------
