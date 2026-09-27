@@ -43,23 +43,28 @@
       </div>
 
       <h2>Come si calcola il punteggio</h2>
-      <p>La mappa è divisa in quadrati di circa 3 km di lato. Ogni mattina alle 6, per ogni quadrato e per ogni specie, FungoMeter calcola un punteggio da 0 a 100 per oggi e per i prossimi 7 giorni.</p>
-      <p class="formula">Punteggio = 100 × pioggia × temperatura × habitat × stagione × quota</p>
-      <p>Ogni fattore vale fra 0 e 1. Basta un fattore a 0 perché il punteggio sia 0: per esempio fuori stagione, oppure dove non c'è l'ambiente giusto.</p>
+      <p>La mappa è divisa in quadrati di circa 3 km di lato, e ognuno in 36 quadrati più piccoli da 500 m, che compaiono quando ingrandisci. Ogni mattina alle 6 FungoMeter calcola per ogni quadrato da 500 m e per ogni specie un punteggio da 0 a 100, per oggi e per i prossimi 7 giorni.</p>
+      <p class="formula">Punteggio = 100 × acqua × temperatura × stagione × habitat × quota × terreno</p>
+      <p>Ogni fattore vale fra 0 e 1. Basta un fattore a 0 perché il punteggio sia 0: per esempio fuori stagione, oppure dove non c'è l'ambiente giusto. Il meteo è quello del quadrato da 3 km; habitat, quota e terreno sono di ogni quadrato da 500 m. Il colore di un quadrato da 3 km è la media dei suoi quadrati migliori (il 25%).</p>
       <ul>
-        <li><strong>Pioggia.</strong> Si somma la pioggia di <span data-regola="giorni_pioggia">14</span> giorni, che finiscono <span data-regola="ritardo_pioggia">3</span> giorni prima del giorno scelto, perché i funghi escono qualche giorno dopo la pioggia. Il fattore sale da 0 a 1 fino alla soglia della specie. Se il suolo è molto umido c'è un piccolo bonus.</li>
-        <li><strong>Temperatura.</strong> Si usa la media delle temperature degli ultimi <span data-regola="giorni_temperatura">7</span> giorni. Vale 1 nell'intervallo ideale della specie e scende a 0 entro 4 °C fuori. C'è un piccolo bonus se dopo una pioggia la temperatura è calata di qualche grado.</li>
-        <li><strong>Habitat.</strong> Dall'uso del suolo (Corine Land Cover). Vale 1 se almeno il 15% del quadrato è un ambiente adatto alla specie, 0,3 se c'è solo un ambiente in parte adatto (per esempio bosco misto, o frutteti e castagneti da frutto, che Corine non distingue), 0 altrimenti. Per la mazza di tamburo contano anche i margini del bosco: un quadrato con almeno il 15% di bosco e il 15% di spazi aperti.</li>
+        <li><strong>Acqua.</strong> Per il 60% è la pioggia degli ultimi <span data-regola="giorni_pioggia">26</span> giorni, che sale da 0 a 1 fino alla soglia della specie. Per il 40% è l'umidità del suolo fra 7 e 28 cm, dove vive il micelio: il modello meteo la calcola tenendo conto anche di quanto evapora. Ogni giorno con la massima oltre 30 °C nelle ultime due settimane toglie il 5%.</li>
+        <li><strong>Temperatura.</strong> Si usa la media delle temperature degli ultimi <span data-regola="giorni_temperatura">20</span> giorni, su una curva a campana: vale 1 alla temperatura ottimale della specie e scende piano allontanandosi. C'è un piccolo bonus se dopo una pioggia la temperatura è calata di qualche grado.</li>
         <li><strong>Stagione.</strong> 1 nei mesi centrali, 0,5 nei mesi di margine, 0 fuori stagione.</li>
-        <li><strong>Quota.</strong> Vale 1 nella fascia ideale e scende a 0 entro 200 m fuori. Si guarda quanta parte del quadrato sta in ogni fascia, non solo la quota media.</li>
+        <li><strong>Habitat.</strong> Dal tipo di bosco: per il Lazio la carta forestale regionale (faggete, castagneti, cerrete, leccete…), per l'Umbria la carta geobotanica regionale (boschi montani, boschi collinari, leccete, conifere, praterie), altrove Corine Land Cover. Vale 1 se almeno il 15% del quadrato è un ambiente adatto, 0,3 se c'è solo un ambiente in parte adatto, 0 altrimenti. Per la mazza di tamburo contano anche i margini del bosco: un quadrato con almeno il 15% di bosco e il 15% di spazi aperti. In Umbria la carta non separa castagneti e cerrete, che stanno insieme nei "boschi collinari".</li>
+        <li><strong>Quota.</strong> Vale 1 nella fascia ideale e scende a 0 entro 200 m fuori.</li>
+        <li><strong>Terreno.</strong> Dal modello del terreno a 30 m: canaloni e impluvi (dove si raccoglie l'acqua) valgono 1, i versanti a nord 0,95, a est e ovest 0,9, a sud 0,85, le creste 0,8, i pendii oltre 35 gradi 0,7. Quando ha piovuto molto la differenza si dimezza. Il pulsante "Canaloni" li mostra sulla mappa in blu.</li>
       </ul>
-      <p>Il meteo dei prossimi giorni è una previsione: più il giorno è lontano, meno il punteggio è affidabile.</p>
+      <p>Il meteo dei prossimi giorni è una previsione: più il giorno è lontano, meno il punteggio è affidabile. I giorni da +5 in poi hanno il bordo tratteggiato.</p>
+      <p>Sopra ogni giorno c'è un indice: la media del 10% di quadrati migliori dell'area che stai guardando (Foligno o Roma). La stella segna il giorno migliore. Con "Tutte le specie" puoi vedere la media delle cinque specie oppure, per ogni quadrato, la specie messa meglio.</p>
+
+      <h2>Da dove vengono i numeri</h2>
+      <p>Le finestre di 26 giorni per la pioggia e di 20 giorni per la temperatura, e l'ottimo di 13 °C per il porcino autunnale, vengono da dieci anni di conteggi giornalieri di porcini in una faggeta tedesca (<a href="https://doi.org/10.64898/2025.12.12.693895" rel="noopener">Brejon Lamartiniere e Hoffman, 2025</a>, studio ancora in revisione). L'importanza dell'umidità del suolo viene da studi su pinete mediterranee (<a href="https://www.sciencedirect.com/science/article/abs/pii/S0168192317303441" rel="noopener">Karavani e colleghi, 2018</a>). Gli altri numeri sono stime ragionevoli, non misure: FungoMeter non ha dati sui ritrovamenti reali per verificarli.</p>
 
       <h2>Le specie</h2>
       <div class="tabella-scorrevole">
         <table>
           <thead>
-            <tr><th>Specie</th><th>Ambiente</th><th>Stagione</th><th>Quota</th><th>Pioggia</th><th>Temperatura media</th></tr>
+            <tr><th>Specie</th><th>Ambiente</th><th>Stagione</th><th>Quota</th><th>Pioggia in 26 giorni</th><th>Temperatura media</th></tr>
           </thead>
           <tbody id="tabella-specie">
             <tr><td colspan="6">Caricamento…</td></tr>
@@ -72,6 +77,8 @@
         <li><strong>Meteo:</strong> <a href="https://open-meteo.com/" rel="noopener">Open-Meteo.com</a>, dati sotto licenza <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>.</li>
         <li><strong>Quota:</strong> Copernicus DEM GLO-30. © DLR e.V. 2010-2014 e © Airbus Defence and Space GmbH 2014-2018, fornito nell'ambito di COPERNICUS dall'Unione europea e dall'ESA; tutti i diritti riservati.</li>
         <li><strong>Uso del suolo:</strong> Corine Land Cover 2018. © Unione europea, Copernicus Land Monitoring Service 2018, Agenzia europea dell'ambiente (EEA).</li>
+        <li><strong>Tipi di bosco, Lazio:</strong> Carta forestale su base tipologica, <a href="https://geoportale.regione.lazio.it/layers/geonode:tipi_forestali2" rel="noopener">Regione Lazio</a>.</li>
+        <li><strong>Tipi di vegetazione, Umbria:</strong> Carta geobotanica con principali classi di utilizzazione del suolo, Regione Umbria e Università di Camerino (<a href="https://umbriageo.regione.umbria.it/" rel="noopener">UmbriaGeo</a>).</li>
         <li><strong>Mappa:</strong> © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors, mostrata con <a href="https://leafletjs.com/" rel="noopener">Leaflet</a>.</li>
       </ul>
 

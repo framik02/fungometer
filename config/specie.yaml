@@ -1,45 +1,80 @@
 # Parametri del punteggio di FungoMeter.
 #
-# Punteggio S = 100 x f_pioggia x f_temperatura x f_habitat x f_stagione x f_quota
-# Ogni fattore vale fra 0 e 1. Qui sotto si cambiano soglie e intervalli:
-# dopo una modifica basta aspettare l'aggiornamento del mattino (o lanciare
+# Il punteggio si calcola per ogni sottocella da 500 m:
+#   S = 100 x acqua x temperatura x habitat x stagione x quota x terreno
+# Ogni fattore vale fra 0 e 1. Acqua e temperatura vengono dal meteo della
+# cella da 3 km; habitat, quota e terreno sono propri di ogni sottocella.
+# Il punteggio di una cella (quello che si vede a mappa lontana) è la media
+# delle sue sottocelle migliori.
+#
+# Dopo una modifica basta aspettare l'aggiornamento del mattino (o lanciare
 # scripts/aggiorna_punteggi.py a mano).
+#
+# Da dove vengono i numeri principali: vedi la pagina Info dell'app e il README.
+# In breve, per il porcino (Brejon Lamartiniere e Hoffman, 2025) la pioggia che
+# spiega meglio le uscite è quella di 26 giorni e la temperatura quella media
+# di 20 giorni, con un ottimo intorno ai 13 °C.
 
 # ---------------------------------------------------------------------------
 # Regole comuni a tutte le specie
 # ---------------------------------------------------------------------------
 comune:
-  pioggia:
-    giorni: 14                  # si somma la pioggia di 14 giorni...
-    ritardo: 3                  # ...che finiscono 3 giorni prima: i funghi escono dopo la pioggia,
-                                # non lo stesso giorno (con 3: da 17 a 3 giorni prima)
-    bonus_suolo: 0.10           # +10% se il suolo è umido...
-    soglia_suolo: 0.30          # ...cioè umidità media 0-7 cm (m3/m3) almeno questa
-    giorni_suolo: 3             # media dell'umidità sugli ultimi N giorni
+  acqua:
+    giorni_pioggia: 26          # pioggia sommata sugli ultimi 26 giorni (oggi compreso)
+    peso_pioggia: 0.6           # l'acqua è 60% pioggia...
+    peso_suolo: 0.4             # ...e 40% umidità del suolo
+    suolo_secco: 0.15           # umidità del suolo a 7-28 cm (m3/m3) che vale 0...
+    suolo_umido: 0.30           # ...e che vale 1 (in mezzo sale in linea retta)
+    giorni_suolo: 3             # media dell'umidità degli ultimi 3 giorni
+    caldo_tmax: 30              # un giorno "di caldo" ha la massima ad almeno 30 °C
+    giorni_caldo: 14            # si contano i giorni di caldo delle ultime 2 settimane
+    penalita_caldo: 0.05        # ogni giorno di caldo toglie il 5%...
+    minimo_caldo: 0.5           # ...ma al massimo si dimezza
   temperatura:
-    giorni_media: 7             # temperatura di riferimento = media delle medie degli ultimi N giorni
-    rampa: 4                    # gradi fuori dall'intervallo ideale prima di arrivare a 0
+    giorni_media: 20            # temperatura di riferimento = media delle medie degli ultimi 20 giorni
+    # Forma a campana: 1 alla temperatura ottimale della specie; ai bordi
+    # dell'intervallo ideale vale circa 0,6; 4 °C oltre i bordi circa 0,1.
     bonus_calo: 0.10            # +10% se dopo una pioggia la temperatura cala
     pioggia_minima_calo: 10     # mm in un giorno per contare come "pioggia"
     calo_minimo: 3              # gradi di calo (3 giorni dopo contro 3 giorni prima)
     cerca_da_giorni: 10         # la pioggia deve essere caduta fra 10...
     cerca_fino_a_giorni: 2      # ...e 2 giorni prima
   habitat:
-    peso_parziale: 0.3          # valore per le classi "parziali" (es. bosco misto)
-    quota_minima_cella: 15      # una classe conta se copre almeno il 15% della cella
+    peso_parziale: 0.3          # valore per gli ambienti "parziali"
+    quota_minima_cella: 15      # un ambiente conta se copre almeno il 15% della sottocella
   quota:
     rampa: 200                  # metri fuori dalla fascia ideale prima di arrivare a 0
+  terreno:
+    # Valore di ogni forma del terreno. I canaloni e i versanti a nord tengono
+    # l'umidità; creste, versanti a sud e pendii ripidissimi meno.
+    pesi:
+      ca: 1.0                   # canalone o impluvio
+      vn: 0.95                  # versante esposto a nord
+      vo: 0.9                   # versante a est o a ovest
+      pi: 0.9                   # pianoro
+      vs: 0.85                  # versante esposto a sud
+      cr: 0.8                   # cresta o dosso
+      ri: 0.7                   # pendio oltre 35 gradi
+    # Quando l'acqua è al massimo, la differenza fra le forme si dimezza:
+    # con tanta pioggia anche creste e versanti a sud vanno bene.
+    effetto_se_bagnato: 0.5
   stagione:
     peso_margine: 0.5           # valore nei mesi di margine
+  cella:
+    quota_migliori: 25          # punteggio della cella = media del 25% di sottocelle migliori
 
-# Promemoria classi Corine usate:
-#   222 frutteti e frutti minori (castagneti da frutto, ma anche noccioleti e frutteti)
-#   311 boschi di latifoglie (querce, castagni, faggi)
-#   312 boschi di conifere (pini, abeti)   313 boschi misti
-#   231 prati stabili e pascoli     321 aree a pascolo naturale e praterie
-#   322 brughiere e cespuglieti     324 aree a vegetazione boschiva e arbustiva in evoluzione
-#   243 aree agricole con spazi naturali importanti
-#   211 seminativi   242 colture complesse
+# Ambienti (usati in habitat qui sotto):
+#   t = tipo di bosco dalle carte regionali (Lazio: carta forestale;
+#       Umbria: carta geobotanica). Dove non ci sono, si usa Corine (c).
+#   t1 faggeta            t2 castagneto          t3 cerreta
+#   t4 querceto (roverella, farnia)              t5 lecceta o sughereta
+#   t6 pineta o conifere  t7 ostrieto o forra
+#   t8 bosco collinare misto (Umbria: cerro, roverella, castagno insieme)
+#   t9 altro bosco (ripariale, robinia)          t10 arbusteto o macchia
+#   t11 prateria o pascolo naturale
+#   c311 latifoglie  c312 conifere  c313 bosco misto  c222 frutteti e castagneti da frutto
+#   c231 prati e pascoli  c321 praterie  c322 brughiere  c324 bosco in evoluzione
+#   c243 aree agricole con spazi naturali  c211 seminativi  c242 colture miste
 
 # ---------------------------------------------------------------------------
 # Specie (mesi: 1 = gennaio ... 12 = dicembre)
@@ -52,11 +87,13 @@ specie:
     mesi_centrali: [6, 7, 8, 9]
     mesi_margine: [5, 10]
     quota: [200, 1200]
-    pioggia_mm: 30
+    pioggia_mm: 55              # in 26 giorni
     temperatura: [16, 24]
+    temperatura_ottimale: 20
     habitat:
-      adatte: [311]
-      parziali: [313, 222]
+      # Il porcino nero (B. aereus) ama anche le leccete
+      adatte: [t1, t2, t3, t4, t5, t8, c311]
+      parziali: [t6, t7, t9, c312, c313, c222]
 
   porcini_autunnali:
     nome: "Porcini autunnali"
@@ -65,12 +102,12 @@ specie:
     mesi_centrali: [10]
     mesi_margine: [9, 11]
     quota: [600, 1800]
-    pioggia_mm: 40
+    pioggia_mm: 75
     temperatura: [10, 18]
+    temperatura_ottimale: 13    # ottimo misurato per B. edulis in faggeta
     habitat:
-      # Faggio con abete è l'habitat tipico: qui il bosco misto vale 1.
-      adatte: [311, 312, 313]
-      parziali: [222]
+      adatte: [t1, t2, t6, c311, c312, c313]
+      parziali: [t3, t4, t7, t8, c222]
 
   ovolo:
     nome: "Ovolo buono"
@@ -79,11 +116,12 @@ specie:
     mesi_centrali: [8, 9]
     mesi_margine: [7, 10]
     quota: [200, 1000]
-    pioggia_mm: 30
+    pioggia_mm: 55
     temperatura: [18, 26]
+    temperatura_ottimale: 22
     habitat:
-      adatte: [311]
-      parziali: [313, 222]
+      adatte: [t2, t3, t4, t8, c311]
+      parziali: [t1, t5, t7, c313, c222]
 
   galletto:
     nome: "Galletto"
@@ -92,11 +130,12 @@ specie:
     mesi_centrali: [7, 8, 9]
     mesi_margine: [6, 10]
     quota: [200, 1500]
-    pioggia_mm: 30
+    pioggia_mm: 55
     temperatura: [14, 22]
+    temperatura_ottimale: 18
     habitat:
-      adatte: [311]
-      parziali: [313, 222]
+      adatte: [t1, t2, t3, t4, t8, c311]
+      parziali: [t5, t6, t7, c312, c313, c222]
 
   mazza_di_tamburo:
     nome: "Mazza di tamburo"
@@ -105,14 +144,15 @@ specie:
     mesi_centrali: [9, 10]
     mesi_margine: [8, 11]
     quota: [0, 1500]
-    pioggia_mm: 25
+    pioggia_mm: 45
     temperatura: [12, 22]
+    temperatura_ottimale: 17
     habitat:
-      adatte: [231, 321, 322, 324, 243]
-      parziali: [311, 312, 313]
-      # Margine del bosco: Corine non lo vede, quindi lo deduciamo.
-      # Una cella con almeno il 15% di bosco E almeno il 15% di spazi aperti
-      # vale 1, perché lì ci sono per forza dei margini.
+      adatte: [t10, t11, c231, c321, c322, c324, c243]
+      parziali: [t1, t2, t3, t4, t5, t6, t7, t8, t9, c311, c312, c313]
+      # Margine del bosco: nessuna carta lo disegna, quindi lo deduciamo.
+      # Una sottocella con almeno il 15% di bosco E almeno il 15% di spazi
+      # aperti vale 1, perché lì ci sono per forza dei margini.
       margine:
-        bosco: [311, 312, 313]
-        aperto: [211, 231, 242, 243, 321, 322, 324]
+        bosco: [t1, t2, t3, t4, t5, t6, t7, t8, t9, c311, c312, c313]
+        aperto: [t10, t11, c211, c231, c242, c243, c321, c322, c324]

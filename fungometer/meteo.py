@@ -3,14 +3,17 @@
 Due servizi con lo stesso formato:
 - previsioni: api.open-meteo.com, con past_days (giorni passati) e
   forecast_days (oggi + giorni futuri);
-- storico: archive-api.open-meteo.com, con start_date e end_date.
+- storico: historical-forecast-api.open-meteo.com, con start_date e end_date.
+  È l'archivio delle previsioni passate (dal 2022): stessi modelli e stessa
+  scala dei dati di ogni giorno, così la prova sugli anni passati è onesta.
+  (L'altro archivio, ERA5, misura l'umidità del suolo su una scala diversa.)
 
 Per non fare 900 richieste, si chiedono più celle alla volta (un "lotto"):
 Open-Meteo accetta liste di coordinate separate da virgole.
 
 Limiti del piano gratuito: 600 chiamate al minuto, 5.000 all'ora,
 10.000 al giorno. Una località con più di 14 giorni di dati conta come
-più di una chiamata (25 giorni = circa 1,8). Per questo fra un lotto e
+più di una chiamata (34 giorni = circa 2,4). Per questo fra un lotto e
 l'altro si aspetta qualche secondo.
 """
 
@@ -19,7 +22,7 @@ import time
 import requests
 
 URL_PREVISIONI = "https://api.open-meteo.com/v1/forecast"
-URL_STORICO = "https://archive-api.open-meteo.com/v1/archive"
+URL_STORICO = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 
 # Nomi delle variabili Open-Meteo e nomi corti usati nel resto del codice.
 VARIABILI = {
@@ -27,11 +30,12 @@ VARIABILI = {
     "temperature_2m_min": "tmin",
     "temperature_2m_max": "tmax",
     "temperature_2m_mean": "tmed",
-    "soil_moisture_0_to_7cm_mean": "suolo",
+    # Umidità del suolo fra 7 e 28 cm, dove vive il micelio
+    "soil_moisture_7_to_28cm_mean": "suolo",
 }
 
 CELLE_PER_LOTTO = 50
-PAUSA_FRA_LOTTI = 12  # secondi: 50 celle x 1,8 = 90 chiamate ogni 12 s, cioè 450 al minuto (limite 600)
+PAUSA_FRA_LOTTI = 15  # secondi: 50 celle x 2,4 = 120 chiamate ogni 15 s, cioè 480 al minuto (limite 600)
 
 # Di solito Open-Meteo risponde in circa un secondo. Ogni tanto una richiesta
 # resta appesa senza risposta: meglio abbandonarla presto e riprovare.
@@ -64,7 +68,8 @@ def _chiedi(url, parametri, tentativi=6):
             return dati if isinstance(dati, list) else [dati]
         except requests.RequestException as errore:
             attesa = 5 * tentativo
-            print(f"  errore di rete ({errore}), riprovo fra {attesa} s")
+            # Solo l'inizio del messaggio: l'indirizzo completo è lunghissimo
+            print(f"  errore di rete ({str(errore).split(' for url')[0][:120]}), riprovo fra {attesa} s")
             time.sleep(attesa)
     raise RuntimeError(f"Open-Meteo non risponde dopo {tentativi} tentativi")
 
@@ -74,7 +79,7 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
     """Scarica il meteo giornaliero di tutte le celle.
 
     Si usa in due modi:
-        scarica_meteo(celle, past_days=14, forecast_days=8)            # previsioni
+        scarica_meteo(celle, past_days=26, forecast_days=8)            # previsioni
         scarica_meteo(celle, start_date="2024-09-01", end_date="2024-11-30")  # storico
 
     Restituisce (date, meteo_per_cella):

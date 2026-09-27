@@ -144,10 +144,39 @@ button, select { font: inherit; color: inherit; }
 .giorni button strong { font-size: 0.95rem; }
 .giorni button[aria-selected="true"] { background: var(--bosco); color: #fff; border-color: var(--bosco); }
 
+/* Giorni migliori, indice e previsioni incerte */
+.giorni button { position: relative; }
+.giorni .stella { position: absolute; top: -2px; right: 3px; color: #d98e04; font-size: 0.85rem; }
+.giorni button[aria-selected="true"] .stella { color: #f2c14e; }
+.giorni .indice { font-size: 0.7rem; opacity: 0.75; }
+.giorni button.migliore { border-color: #d98e04; box-shadow: inset 0 0 0 1px #d98e04; }
+.giorni button.incerto { border-style: dashed; }
+.nota-giorni { margin-top: 4px; font-size: 0.72rem; color: var(--testo-tenue); }
+
 /* --- Mappa ------------------------------------------------------------ */
 
 .contenitore-mappa { position: relative; flex: 1; min-height: 0; }
 #mappa { position: absolute; inset: 0; background: #e8e4dc; }
+
+.bottone-canaloni {
+  position: absolute;
+  right: 12px;
+  bottom: 122px;
+  z-index: 800;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--superficie);
+  color: #1d5aa6;
+  box-shadow: var(--ombra);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.bottone-canaloni[aria-pressed="true"] { background: #1d5aa6; color: #fff; }
 
 .bottone-posizione {
   position: absolute;
@@ -207,6 +236,7 @@ button, select { font: inherit; color: inherit; }
 /* Quando la scheda è aperta, via ciò che la coprirebbe */
 .scheda-aperta .legenda,
 .scheda-aperta .bottone-posizione,
+.scheda-aperta .bottone-canaloni,
 .scheda-aperta .leaflet-control-zoom { display: none; }
 
 .leaflet-popup-content { margin: 12px 14px; font-size: 0.9rem; line-height: 1.35; }
@@ -223,6 +253,8 @@ button, select { font: inherit; color: inherit; }
 .scheda .barra { height: 6px; border-radius: 3px; background: #eee7dc; overflow: hidden; }
 .scheda .barra span { display: block; height: 100%; background: var(--bosco); }
 .scheda .nota { margin-top: 8px; font-size: 0.75rem; color: var(--testo-tenue); }
+.scheda .elenco-specie { margin: 6px 0 0; padding: 0; list-style: none; }
+.scheda .elenco-specie li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px solid #eee7dc; font-size: 0.85rem; }
 
 /* --- Piede ------------------------------------------------------------ */
 

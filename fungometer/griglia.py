@@ -17,6 +17,11 @@ import yaml
 
 KM_PER_GRADO_LAT = 111.32
 
+# Ogni cella da 3 km si divide in 6 x 6 sottocelle da 500 m.
+# Il meteo resta per cella (i modelli meteo non sono più fini di così);
+# habitat, quota e terreno si calcolano per sottocella.
+SOTTOCELLE_PER_LATO = 6
+
 
 def carica_aree(percorso):
     """Legge il file YAML delle aree e lo restituisce come dizionario."""
@@ -58,14 +63,16 @@ def celle_di_un_area(codice_area, area, lato_km):
             lon = c_ovest + passo_lon / 2
 
             # La prima zona che contiene il centro dà il nome alla cella.
-            zona = next((z for z in zone if _dentro(lat, lon, z)), None)
-            if zona is None:
+            n_zona = next((k for k, z in enumerate(zone) if _dentro(lat, lon, z)), None)
+            if n_zona is None:
                 continue
+            zona = zone[n_zona]
 
             celle.append({
                 "id": f"{codice_area}_{riga:03d}_{colonna:03d}",
                 "area": codice_area,
                 "zona": zona["nome"],
+                "zona_id": f"{codice_area}_{n_zona + 1}",
                 "lat": round(lat, 5),
                 "lon": round(lon, 5),
                 # Confini della cella: [sud, ovest, nord, est]
@@ -77,6 +84,17 @@ def celle_di_un_area(codice_area, area, lato_km):
                 ],
             })
     return celle
+
+
+def bbox_sottocella(bbox, k, n=SOTTOCELLE_PER_LATO):
+    """Confini [sud, ovest, nord, est] della sottocella numero k (0 = in basso a
+    sinistra, poi per righe da sud a nord)."""
+    sud, ovest, nord, est = bbox
+    riga, colonna = divmod(k, n)
+    dlat = (nord - sud) / n
+    dlon = (est - ovest) / n
+    return [sud + riga * dlat, ovest + colonna * dlon,
+            sud + (riga + 1) * dlat, ovest + (colonna + 1) * dlon]
 
 
 def costruisci_griglia(percorso_aree):

@@ -33,7 +33,7 @@ async function riempiTabella() {
         <td>${intervalloMesi(sp.mesi_centrali)}${margine}</td>
         <td>${sp.quota[0]}-${sp.quota[1]} m</td>
         <td>almeno ${sp.pioggia_mm} mm</td>
-        <td>${sp.temperatura[0]}-${sp.temperatura[1]} °C</td>
+        <td>${sp.temperatura[0]}-${sp.temperatura[1]} °C${sp.temperatura_ottimale ? `<br><em>ottimo ${sp.temperatura_ottimale} °C</em>` : ""}</td>
       </tr>`;
     }).join("");
 

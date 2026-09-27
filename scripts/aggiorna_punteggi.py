@@ -3,27 +3,35 @@
     python scripts/aggiorna_punteggi.py                  (lavora subito)
     python scripts/aggiorna_punteggi.py --controlla-ora  (come il cron: solo dopo le 6, una volta al giorno)
 
-Legge:  data/celle.json (da prepare_static.py) e config/specie.yaml
-Scrive: docs/data/punteggi.json  (punteggi e meteo, cambia ogni giorno)
-        docs/data/celle.json     (forma e dati fissi delle celle, per la mappa)
+Legge:  data/celle.json e data/sottocelle.json (da prepare_static.py)
+        config/specie.yaml
+Scrive: docs/data/punteggi.json            punteggi e meteo delle celle, cambia ogni giorno
+        docs/data/celle.json               forma e dati fissi delle celle, per la mappa
+        docs/data/sottocelle/<zona>.json   dati fissi delle sottocelle, uno per zona
 
 Formato di punteggi.json (scritto compatto per restare sotto 1 MB):
 {
   "aggiornato": "2026-09-27T06:03:12+02:00",
+  "regole": {...},                      numeri che servono all'app
   "giorni": ["2026-09-27", ... 8 date],
   "specie": [{"id": "porcini_estivi", "nome": ..., "stagione": [8 fattori 0-100]}, ...],
   "celle": {
     "foligno_000_010": {
-      "p":  [8 x pioggia degli ultimi 14 giorni, mm],
+      "p":  [8 x pioggia degli ultimi 26 giorni, mm],
+      "u":  [8 x umidità del suolo 7-28 cm, m3/m3],
+      "k":  [8 x giorni di caldo nelle ultime 2 settimane],
       "tn": [8 x temperatura minima del giorno], "tx": [8 x massima],
-      "tr": [8 x temperatura di riferimento, media degli ultimi 7 giorni],
-      "u":  [8 x umidità del suolo, m3/m3],
+      "tr": [8 x temperatura di riferimento, media degli ultimi 20 giorni],
       "s":  [una voce per specie, nello stesso ordine di "specie":
-             null se habitat o quota valgono 0 (punteggio sempre 0), altrimenti
-             {"S": [8 punteggi], "fp": [8], "ft": [8], "fh": habitat, "fq": quota}]
+             {"S": [8 punteggi della cella], "fa": [8 fattori acqua], "ft": [8 fattori temperatura]}]
     }
   }
 }
+
+Formato di docs/data/sottocelle/<zona>.json:
+{ "id cella": [36 voci, per righe da sud a nord; null se la sottocella è acqua,
+               altrimenti [quota mediana, pendenza media, uso principale, %, secondo uso, %,
+                           % di canaloni, fattore terreno, [habitat x specie], [quota x specie]]] }
 Tutti i fattori sono interi da 0 a 100 (cioè il fattore x 100).
 """
 
@@ -37,16 +45,18 @@ from zoneinfo import ZoneInfo
 RADICE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RADICE))
 
+from fungometer.griglia import SOTTOCELLE_PER_LATO  # noqa: E402
 from fungometer.meteo import scarica_meteo  # noqa: E402
 from fungometer.punteggio import (  # noqa: E402
     carica_specie,
-    fattore_stagione,
+    fattori_meteo,
     fattori_statici,
     punteggio,
+    punteggio_cella,
 )
 
-GIORNI_PASSATI = 17  # 14 giorni di pioggia che finiscono 3 giorni prima di oggi
-GIORNI_FUTURI = 8  # oggi + 7
+GIORNI_PASSATI = 26  # la pioggia si somma su 26 giorni
+GIORNI_FUTURI = 8    # oggi + 7
 FUSO = ZoneInfo("Europe/Rome")
 
 
@@ -59,7 +69,24 @@ def _arrotonda(lista, cifre):
     return [None if v is None else round(v, cifre) for v in lista]
 
 
-def calcola(celle, config, date_meteo, meteo_per_cella, giorni):
+def statici_di_tutte(sottocelle, config):
+    """Habitat, quota e terreno di ogni sottocella per ogni specie.
+
+    Restituisce {id cella: [None o {codice specie: fattori}] x 36}.
+    """
+    risultato = {}
+    for id_cella, elenco in sottocelle.items():
+        risultato[id_cella] = [
+            None if s is None else {
+                codice: fattori_statici(s, sp, config["comune"])
+                for codice, sp in config["specie"].items()
+            }
+            for s in elenco
+        ]
+    return risultato
+
+
+def calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni):
     """Costruisce il dizionario di punteggi.json per i giorni richiesti."""
     comune = config["comune"]
     specie = config["specie"]
@@ -79,9 +106,10 @@ def calcola(celle, config, date_meteo, meteo_per_cella, giorni):
             "quota": sp["quota"],
             "pioggia_mm": sp["pioggia_mm"],
             "temperatura": sp["temperatura"],
+            "temperatura_ottimale": sp.get("temperatura_ottimale"),
             "stagione": [
-                _cento(fattore_stagione(m, sp["mesi_centrali"], sp["mesi_margine"],
-                                        comune["stagione"]))
+                _cento(1 if m in sp["mesi_centrali"] else comune["stagione"]["peso_margine"]
+                       if m in sp["mesi_margine"] else 0)
                 for m in mesi
             ],
         })
@@ -90,42 +118,37 @@ def calcola(celle, config, date_meteo, meteo_per_cella, giorni):
     for cella in celle:
         meteo = meteo_per_cella[cella["id"]]
         voce = {
-            "p": [], "tr": [],
+            "p": [], "u": [], "k": [], "tr": [],
             "tn": _arrotonda([meteo["tmin"][i] for i in indici], 1),
             "tx": _arrotonda([meteo["tmax"][i] for i in indici], 1),
-            "u": _arrotonda([meteo["suolo"][i] for i in indici], 2),
             "s": [],
         }
+        sottocelle = [s for s in statici[cella["id"]] if s is not None]
         for codice, sp in specie.items():
-            statici = fattori_statici(cella, sp, comune)
-            risultati = [
-                punteggio(meteo, i, m, sp, comune, statici)
-                for i, m in zip(indici, mesi)
-            ]
-            # Pioggia e temperatura di riferimento non dipendono dalla specie:
-            # le prendiamo dalla prima.
-            if not voce["p"]:
-                voce["p"] = [round(r["pioggia_mm"]) for r in risultati]
-                voce["tr"] = _arrotonda([r["t_rif"] for r in risultati], 1)
-
-            if statici["habitat"] == 0 or statici["quota"] == 0:
-                voce["s"].append(None)
-            else:
-                voce["s"].append({
-                    "S": [r["S"] for r in risultati],
-                    "fp": [_cento(r["pioggia"]) for r in risultati],
-                    "ft": [_cento(r["temperatura"]) for r in risultati],
-                    "fh": _cento(statici["habitat"]),
-                    "fq": _cento(statici["quota"]),
-                })
+            S, fa, ft = [], [], []
+            for i, m in zip(indici, mesi):
+                mf = fattori_meteo(meteo, i, m, sp, comune)
+                punti = [punteggio(mf, s[codice], comune) for s in sottocelle]
+                S.append(round(punteggio_cella(punti, comune)))
+                fa.append(_cento(mf["acqua"]))
+                ft.append(_cento(mf["temperatura"]))
+                # Pioggia, suolo, caldo e temperatura non dipendono dalla specie
+                if len(voce["p"]) < len(indici):
+                    voce["p"].append(round(mf["pioggia_mm"]))
+                    voce["u"].append(None if mf["suolo"] is None else round(mf["suolo"], 3))
+                    voce["k"].append(mf["caldo"])
+                    voce["tr"].append(None if mf["t_rif"] is None else round(mf["t_rif"], 1))
+            voce["s"].append({"S": S, "fa": fa, "ft": ft})
         uscita_celle[cella["id"]] = voce
 
     return {
         "aggiornato": datetime.now(FUSO).isoformat(timespec="seconds"),
         "regole": {
-            "giorni_pioggia": comune["pioggia"]["giorni"],
-            "ritardo_pioggia": comune["pioggia"].get("ritardo", 0),
+            "giorni_pioggia": comune["acqua"]["giorni_pioggia"],
             "giorni_temperatura": comune["temperatura"]["giorni_media"],
+            "effetto_se_bagnato": comune["terreno"]["effetto_se_bagnato"],
+            "quota_migliori": comune["cella"]["quota_migliori"],
+            "sottocelle_per_lato": SOTTOCELLE_PER_LATO,
         },
         "giorni": giorni,
         "specie": uscita_specie,
@@ -136,24 +159,43 @@ def calcola(celle, config, date_meteo, meteo_per_cella, giorni):
 def celle_per_la_mappa(celle):
     """Versione ridotta di celle.json con quello che serve all'app."""
     return [
-        {
-            "id": c["id"],
-            "zona": c["zona"],
-            "bbox": c["bbox"],
-            "quota": c["quota"],
-            # Solo le classi Corine che coprono almeno il 5% della cella.
-            "corine": {k: v for k, v in c["corine"].items() if v >= 5},
-        }
+        {"id": c["id"], "zona": c["zona"], "zona_id": c["zona_id"], "bbox": c["bbox"],
+         "quota": c["quota"], "uso": c["uso"]}
         for c in celle
     ]
 
 
-def scrivi_json(dati, percorso):
+def sottocelle_per_zona(celle, sottocelle, statici, config):
+    """Dati fissi delle sottocelle, raggruppati per zona (un file per zona)."""
+    codici = list(config["specie"])
+    per_zona = {}
+    for cella in celle:
+        elenco = []
+        for s, st in zip(sottocelle[cella["id"]], statici[cella["id"]]):
+            if s is None:
+                elenco.append(None)
+                continue
+            usi = sorted(s["h"].items(), key=lambda x: -x[1])[:2] + [("", 0)] * 2
+            primo_statico = st[codici[0]]
+            elenco.append([
+                s["q"][1], s["p"],
+                usi[0][0], usi[0][1], usi[1][0], usi[1][1],
+                s["m"].get("ca", 0),
+                _cento(primo_statico["terreno"]),
+                [_cento(st[c]["habitat"]) for c in codici],
+                [_cento(st[c]["quota"]) for c in codici],
+            ])
+        per_zona.setdefault(cella["zona_id"], {})[cella["id"]] = elenco
+    return per_zona
+
+
+def scrivi_json(dati, percorso, stampa=True):
     percorso.parent.mkdir(parents=True, exist_ok=True)
     with open(percorso, "w", encoding="utf-8") as f:
         json.dump(dati, f, ensure_ascii=False, separators=(",", ":"))
     kb = percorso.stat().st_size / 1024
-    print(f"Scritto {percorso.relative_to(RADICE)} ({kb:.0f} KB)")
+    if stampa:
+        print(f"Scritto {percorso.relative_to(RADICE)} ({kb:.0f} KB)")
     return kb
 
 
@@ -194,7 +236,10 @@ def main():
 
     with open(RADICE / "data" / "celle.json", encoding="utf-8") as f:
         celle = json.load(f)
+    with open(RADICE / "data" / "sottocelle.json", encoding="utf-8") as f:
+        sottocelle = json.load(f)
     config = carica_specie(RADICE / "config" / "specie.yaml")
+    statici = statici_di_tutte(sottocelle, config)
 
     print(f"Scarico il meteo di {len(celle)} celle...")
     date_meteo, meteo_per_cella = scarica_meteo(
@@ -205,9 +250,14 @@ def main():
     inizio = date_meteo.index(oggi)
     giorni = date_meteo[inizio: inizio + GIORNI_FUTURI]
 
-    dati = calcola(celle, config, date_meteo, meteo_per_cella, giorni)
+    dati = calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni)
     kb = scrivi_json(dati, uscita_punteggi)
     scrivi_json(celle_per_la_mappa(celle), RADICE / "docs" / "data" / "celle.json")
+    totale = 0
+    for zona_id, contenuto in sottocelle_per_zona(celle, sottocelle, statici, config).items():
+        totale += scrivi_json(contenuto, RADICE / "docs" / "data" / "sottocelle" / f"{zona_id}.json",
+                              stampa=False)
+    print(f"Scritte le sottocelle di tutte le zone ({totale:.0f} KB in totale)")
 
     if kb > 1024:
         sys.exit("ATTENZIONE: punteggi.json supera 1 MB")

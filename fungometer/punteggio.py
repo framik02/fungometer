@@ -1,6 +1,11 @@
 """Il motore del punteggio di FungoMeter.
 
-S = 100 x f_pioggia x f_temperatura x f_habitat x f_stagione x f_quota
+Per ogni sottocella da 500 m:
+    S = 100 x acqua x temperatura x habitat x stagione x quota x terreno
+
+- acqua e temperatura dipendono dal meteo della cella da 3 km (e dal giorno);
+- habitat, quota e terreno dipendono dalla sottocella (e non cambiano);
+- stagione dipende solo dal mese.
 
 Ogni funzione qui sotto calcola UN fattore fra 0 e 1. Sono funzioni "pure":
 ricevono numeri e restituiscono numeri, senza leggere file né internet.
@@ -12,7 +17,7 @@ lunghe uguali e nello stesso ordine di date:
 `i` è la posizione del giorno per cui si calcola il punteggio.
 """
 
-from pathlib import Path
+import math
 
 import yaml
 
@@ -37,8 +42,8 @@ def _finestra(lista, i, giorni):
 def rampa(valore, basso, alto, larghezza):
     """1 dentro [basso, alto], scende in linea retta a 0 entro `larghezza` fuori.
 
-    Esempio con basso=16, alto=24, larghezza=4:
-        14 -> 0,5    16 -> 1    24 -> 1    26 -> 0,5    28 o più -> 0
+    Esempio con basso=200, alto=1200, larghezza=200:
+        100 -> 0,5    200 -> 1    1200 -> 1    1300 -> 0,5    1400 o più -> 0
     """
     if basso <= valore <= alto:
         return 1.0
@@ -46,27 +51,49 @@ def rampa(valore, basso, alto, larghezza):
     return max(0.0, 1.0 - distanza / larghezza)
 
 
-# ---------------------------------------------------------------------------
-# I cinque fattori
-# ---------------------------------------------------------------------------
+def campana(valore, ottimo, basso, alto):
+    """Curva a campana: 1 all'ottimo, circa 0,6 ai bordi [basso, alto].
 
-def fattore_pioggia(meteo, i, soglia_mm, regole):
-    """Pioggia cumulata in N giorni, divisa per la soglia della specie.
-
-    La finestra finisce `ritardo` giorni prima di i: con giorni=14 e
-    ritardo=3 si somma la pioggia caduta da 17 a 3 giorni prima.
-    Sale in linea retta da 0 (niente pioggia) a 1 (soglia raggiunta).
-    Se il suolo è umido si aggiunge un piccolo bonus (sempre fino a 1).
-    Restituisce (fattore, pioggia_mm).
+    È una gaussiana con deviazione standard pari a metà dell'intervallo.
+    Esempio con ottimo 13 e intervallo 10-18 (deviazione 4):
+        13 -> 1    9 o 17 -> 0,61    5 o 21 -> 0,14
     """
-    fine = i - regole.get("ritardo", 0)
-    pioggia = sum(p or 0 for p in _finestra(meteo["pioggia"], fine, regole["giorni"]))
-    fattore = min(1.0, pioggia / soglia_mm)
+    sigma = (alto - basso) / 2
+    return math.exp(-0.5 * ((valore - ottimo) / sigma) ** 2)
+
+
+# ---------------------------------------------------------------------------
+# Fattori che dipendono dal meteo (per cella e per giorno)
+# ---------------------------------------------------------------------------
+
+def fattore_acqua(meteo, i, soglia_mm, regole):
+    """Quanta acqua c'è per i funghi: pioggia recente e umidità del suolo.
+
+    - pioggia: somma degli ultimi 26 giorni, divisa per la soglia della specie
+      (da 0 a 1, poi resta 1);
+    - suolo: umidità a 7-28 cm, media degli ultimi 3 giorni, da 0 (secco) a 1
+      (umido). L'umidità del suolo tiene già conto di quanto evapora: è il
+      "bilancio idrico" calcolato dal modello meteo;
+    - acqua = 60% pioggia + 40% suolo;
+    - ogni giorno con la massima oltre 30 °C nelle ultime 2 settimane toglie il
+      5% (al massimo si dimezza): il caldo secca il terreno.
+    Restituisce (fattore, pioggia_mm, suolo, giorni_di_caldo).
+    """
+    pioggia = sum(p or 0 for p in _finestra(meteo["pioggia"], i, regole["giorni_pioggia"]))
+    f_pioggia = min(1.0, pioggia / soglia_mm)
 
     suolo = _media(_finestra(meteo["suolo"], i, regole["giorni_suolo"]))
-    if suolo is not None and suolo >= regole["soglia_suolo"]:
-        fattore = min(1.0, fattore * (1 + regole["bonus_suolo"]))
-    return fattore, pioggia
+    if suolo is None:
+        # Senza dati sul suolo si usa solo la pioggia
+        f_acqua = f_pioggia
+    else:
+        f_suolo = rampa(suolo, regole["suolo_umido"], 99, regole["suolo_umido"] - regole["suolo_secco"])
+        f_acqua = regole["peso_pioggia"] * f_pioggia + regole["peso_suolo"] * f_suolo
+
+    caldo = sum(1 for t in _finestra(meteo["tmax"], i, regole["giorni_caldo"])
+                if t is not None and t >= regole["caldo_tmax"])
+    f_acqua *= max(regole["minimo_caldo"], 1 - regole["penalita_caldo"] * caldo)
+    return f_acqua, pioggia, suolo, caldo
 
 
 def calo_termico_dopo_pioggia(meteo, i, regole):
@@ -88,9 +115,9 @@ def calo_termico_dopo_pioggia(meteo, i, regole):
     return False
 
 
-def fattore_temperatura(meteo, i, intervallo, regole):
-    """Media delle temperature medie degli ultimi N giorni, confrontata con
-    l'intervallo ideale della specie (rampa di 4 °C fuori).
+def fattore_temperatura(meteo, i, specie, regole):
+    """Media delle temperature medie degli ultimi 20 giorni, su una campana
+    centrata sulla temperatura ottimale della specie.
 
     Bonus se dopo una pioggia c'è stato un calo termico.
     Restituisce (fattore, temperatura_di_riferimento).
@@ -98,37 +125,12 @@ def fattore_temperatura(meteo, i, intervallo, regole):
     t_rif = _media(_finestra(meteo["tmed"], i, regole["giorni_media"]))
     if t_rif is None:
         return 0.0, None
-    fattore = rampa(t_rif, intervallo[0], intervallo[1], regole["rampa"])
-    if fattore > 0 and calo_termico_dopo_pioggia(meteo, i, regole):
+    basso, alto = specie["temperatura"]
+    ottimo = specie.get("temperatura_ottimale", (basso + alto) / 2)
+    fattore = campana(t_rif, ottimo, basso, alto)
+    if calo_termico_dopo_pioggia(meteo, i, regole):
         fattore = min(1.0, fattore * (1 + regole["bonus_calo"]))
     return fattore, t_rif
-
-
-def fattore_habitat(corine, habitat, regole):
-    """Quanto l'uso del suolo della cella è adatto alla specie.
-
-    `corine` è {codice: percentuale della cella}, es. {"311": 52, "222": 23}.
-    Conta solo una classe che copre almeno il 15% della cella:
-        classe adatta -> 1;  classe parziale (es. bosco misto) -> 0,3;  altro -> 0.
-    Si prende il valore migliore fra le classi presenti.
-    Per la mazza di tamburo c'è anche la regola del "margine" (bosco + aperto).
-    """
-    minimo = regole["quota_minima_cella"]
-    presenti = {int(c) for c, perc in corine.items() if perc >= minimo}
-
-    if presenti & set(habitat.get("adatte", [])):
-        return 1.0
-
-    margine = habitat.get("margine")
-    if margine:
-        bosco = sum(perc for c, perc in corine.items() if int(c) in margine["bosco"])
-        aperto = sum(perc for c, perc in corine.items() if int(c) in margine["aperto"])
-        if bosco >= minimo and aperto >= minimo:
-            return 1.0
-
-    if presenti & set(habitat.get("parziali", [])):
-        return regole["peso_parziale"]
-    return 0.0
 
 
 def fattore_stagione(mese, mesi_centrali, mesi_margine, regole):
@@ -140,70 +142,108 @@ def fattore_stagione(mese, mesi_centrali, mesi_margine, regole):
     return 0.0
 
 
-def fattore_quota(fasce_quota, fascia_ideale, regole):
-    """Quanto della cella sta nella fascia di quota ideale.
+# ---------------------------------------------------------------------------
+# Fattori della sottocella (non cambiano di giorno in giorno)
+# ---------------------------------------------------------------------------
 
-    `fasce_quota` è {inizio fascia da 100 m: percentuale}, es. {"700": 14}.
-    Ogni fascia vale la rampa calcolata sul suo centro (700 -> 750 m);
-    il fattore è la media pesata sulle percentuali.
-    Esempio: metà cella a 900 m (ideale) e metà a 1500 m (fuori) -> 0,5.
+def fattore_habitat(uso, habitat, regole):
+    """Quanto l'ambiente della sottocella è adatto alla specie.
+
+    `uso` è {ambiente: percentuale}, es. {"t8": 55, "c211": 30}
+    (t = tipo di bosco dalle carte regionali, c = classe Corine).
+    Conta solo un ambiente che copre almeno il 15% della sottocella:
+        adatto -> 1;  parziale -> 0,3;  altro -> 0.
+    Per la mazza di tamburo c'è anche la regola del "margine" (bosco + aperto).
     """
-    totale = sum(fasce_quota.values())
+    minimo = regole["quota_minima_cella"]
+    presenti = {a for a, perc in uso.items() if perc >= minimo}
+
+    if presenti & set(habitat.get("adatte", [])):
+        return 1.0
+
+    margine = habitat.get("margine")
+    if margine:
+        bosco = sum(perc for a, perc in uso.items() if a in margine["bosco"])
+        aperto = sum(perc for a, perc in uso.items() if a in margine["aperto"])
+        if bosco >= minimo and aperto >= minimo:
+            return 1.0
+
+    if presenti & set(habitat.get("parziali", [])):
+        return regole["peso_parziale"]
+    return 0.0
+
+
+def fattore_quota(quote, fascia_ideale, regole):
+    """Quota della sottocella rispetto alla fascia ideale della specie.
+
+    `quote` sono il 10°, 50° e 90° percentile della quota della sottocella:
+    il fattore è la media della rampa su questi tre valori, così una
+    sottocella a cavallo del limite vale una via di mezzo.
+    """
+    valori = [rampa(q, fascia_ideale[0], fascia_ideale[1], regole["rampa"]) for q in quote]
+    return sum(valori) / len(valori)
+
+
+def fattore_terreno_base(forme, regole):
+    """Media dei pesi delle forme del terreno della sottocella.
+
+    `forme` è {forma: percentuale}, es. {"ca": 20, "vn": 50, "cr": 30}.
+    """
+    totale = sum(forme.values())
     if totale == 0:
-        return 0.0
-    somma = 0.0
-    for inizio, perc in fasce_quota.items():
-        centro = int(inizio) + 50
-        somma += perc * rampa(centro, fascia_ideale[0], fascia_ideale[1], regole["rampa"])
-    return somma / totale
+        return 1.0
+    return sum(perc * regole["pesi"].get(f, 1.0) for f, perc in forme.items()) / totale
+
+
+def terreno_effettivo(base, f_acqua, regole):
+    """Il terreno conta di più quando è secco.
+
+    Con acqua 0 vale il fattore base; con acqua 1 la differenza da 1 si riduce
+    di `effetto_se_bagnato` (a metà, con il valore predefinito).
+    """
+    return 1 - (1 - base) * (1 - regole["effetto_se_bagnato"] * f_acqua)
 
 
 # ---------------------------------------------------------------------------
 # Il punteggio finale
 # ---------------------------------------------------------------------------
 
-def fattori_statici(cella, specie, comune):
-    """Habitat e quota non cambiano di giorno in giorno: si calcolano una volta."""
+def fattori_statici(sottocella, specie, comune):
+    """Habitat, quota e terreno di una sottocella per una specie."""
     return {
-        "habitat": fattore_habitat(cella["corine"], specie["habitat"], comune["habitat"]),
-        "quota": fattore_quota(cella["fasce_quota"], specie["quota"], comune["quota"]),
+        "habitat": fattore_habitat(sottocella["h"], specie["habitat"], comune["habitat"]),
+        "quota": fattore_quota(sottocella["q"], specie["quota"], comune["quota"]),
+        "terreno": fattore_terreno_base(sottocella["m"], comune["terreno"]),
     }
 
 
-def punteggio(meteo, i, mese, specie, comune, statici):
-    """Calcola il punteggio di una specie in una cella per il giorno i.
+def fattori_meteo(meteo, i, mese, specie, comune):
+    """Acqua, temperatura e stagione di una cella per un giorno e una specie."""
+    f_acqua, pioggia, suolo, caldo = fattore_acqua(meteo, i, specie["pioggia_mm"], comune["acqua"])
+    f_temp, t_rif = fattore_temperatura(meteo, i, specie, comune["temperatura"])
+    f_stagione = fattore_stagione(mese, specie["mesi_centrali"], specie["mesi_margine"],
+                                  comune["stagione"])
+    return {
+        "acqua": f_acqua, "temperatura": f_temp, "stagione": f_stagione,
+        "pioggia_mm": pioggia, "suolo": suolo, "caldo": caldo, "t_rif": t_rif,
+    }
 
-    Restituisce un dizionario con il punteggio (0-100, intero) e i fattori,
-    che servono all'app per spiegare il numero.
+
+def punteggio(meteo_f, statici, comune):
+    """Punteggio 0-100 (decimale) di una sottocella, dati i fattori già calcolati."""
+    terreno = terreno_effettivo(statici["terreno"], meteo_f["acqua"], comune["terreno"])
+    return (100 * meteo_f["acqua"] * meteo_f["temperatura"] * meteo_f["stagione"]
+            * statici["habitat"] * statici["quota"] * terreno)
+
+
+def punteggio_cella(punteggi_sottocelle, comune):
+    """Punteggio di una cella: media del 25% di sottocelle migliori.
+
+    Così una cella con un bel bosco in un angolo non sparisce solo perché
+    il resto è campo coltivato.
     """
-    f_pioggia, pioggia_mm = fattore_pioggia(meteo, i, specie["pioggia_mm"], comune["pioggia"])
-    f_temp, t_rif = fattore_temperatura(meteo, i, specie["temperatura"], comune["temperatura"])
-    f_stagione = fattore_stagione(
-        mese, specie["mesi_centrali"], specie["mesi_margine"], comune["stagione"]
-    )
-    s = 100 * f_pioggia * f_temp * statici["habitat"] * f_stagione * statici["quota"]
-    return {
-        "S": round(s),
-        "pioggia": f_pioggia,
-        "temperatura": f_temp,
-        "habitat": statici["habitat"],
-        "stagione": f_stagione,
-        "quota": statici["quota"],
-        "pioggia_mm": pioggia_mm,
-        "t_rif": t_rif,
-    }
-
-
-if __name__ == "__main__":
-    # Prova veloce con un meteo inventato: python -m fungometer.punteggio
-    radice = Path(__file__).resolve().parent.parent
-    config = carica_specie(radice / "config" / "specie.yaml")
-    meteo = {
-        "pioggia": [0] * 10 + [20, 15] + [0] * 4,
-        "tmed": [20] * 11 + [15] * 5,
-        "tmin": [12] * 16, "tmax": [25] * 16, "suolo": [0.35] * 16,
-    }
-    cella = {"corine": {"311": 60, "231": 40}, "fasce_quota": {"900": 50, "1000": 50}}
-    for codice, sp in config["specie"].items():
-        statici = fattori_statici(cella, sp, config["comune"])
-        print(codice, punteggio(meteo, 15, 10, sp, config["comune"], statici)["S"])
+    if not punteggi_sottocelle:
+        return 0.0
+    ordinati = sorted(punteggi_sottocelle, reverse=True)
+    n = max(1, round(len(ordinati) * comune["cella"]["quota_migliori"] / 100))
+    return sum(ordinati[:n]) / n
