@@ -1,9 +1,181 @@
 # FungoMeter
 
-Punteggio giornaliero (0-100) di quanto sono favorevoli le condizioni per trovare
-alcune specie di funghi nei dintorni di Foligno e di Roma.
+Una mappa che ogni mattina dà un punteggio da 0 a 100 a quanto sono favorevoli
+le condizioni per trovare cinque specie di funghi nei dintorni di Foligno e di
+Roma. Funziona dal browser del telefono e si può installare come app.
 
-Il punteggio non garantisce ritrovamenti e l'app non identifica i funghi: per il
-controllo rivolgersi all'Ispettorato micologico della ASL (gratuito).
+**App:** https://framik02.github.io/fungometer/
 
-Lavori in corso: la guida completa arriverà con il frontend.
+Il punteggio non garantisce ritrovamenti e l'app non identifica i funghi: ogni
+raccolta va fatta controllare all'Ispettorato micologico della ASL (gratuito).
+
+Costo: zero. Niente server, database o servizi a pagamento. Il repository è
+pubblico perché così GitHub Actions e GitHub Pages sono gratuiti.
+
+## Come funziona
+
+```
+ogni mattina alle 6              una volta sola (sul tuo PC)
+GitHub Actions                   scripts/scarica_corine.py
+  scripts/aggiorna_punteggi.py   scripts/prepare_static.py
+    meteo da Open-Meteo                 |
+    + data/celle.json  <----------------+  quota (Copernicus) e
+    + config/specie.yaml                   uso del suolo (Corine)
+    -> docs/data/punteggi.json
+    -> commit automatico
+            |
+GitHub Pages pubblica docs/  ->  la mappa sul telefono
+```
+
+## Cartelle
+
+| Percorso | Cosa contiene |
+|---|---|
+| `config/aree.yaml` | le zone coperte (rettangoli in gradi) |
+| `config/specie.yaml` | soglie e parametri delle specie |
+| `data/celle.json` | quota e uso del suolo di ogni cella (prodotto da `prepare_static.py`) |
+| `data/raw/` | DEM e Corine grezzi, **non** salvati su GitHub |
+| `fungometer/` | il codice Python: griglia, meteo, punteggio |
+| `scripts/` | gli script da lanciare |
+| `tests/` | i test del punteggio (pytest) |
+| `docs/` | il sito: `index.html`, `app.js`, `info.html`, dati del giorno |
+| `.github/workflows/aggiorna.yml` | l'aggiornamento automatico delle 6 |
+
+## Installare sul tuo PC
+
+Serve Python 3.10 o più recente. Da PowerShell, nella cartella del progetto:
+
+```
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-prepare.txt
+```
+
+Se `pip` dentro `.venv` dà errori di certificato SSL, installa usando il pip
+del sistema indicando l'ambiente del progetto:
+
+```
+python -m pip --python .venv\Scripts\python.exe install -r requirements-prepare.txt
+```
+
+## Scaricare Corine Land Cover
+
+L'uso del suolo viene da **Corine Land Cover 2018**. Ci sono due strade.
+
+### Strada 1, automatica (consigliata)
+
+```
+.venv\Scripts\python scripts\scarica_corine.py
+```
+
+Scarica senza login i poligoni Corine delle nostre aree dal servizio pubblico
+dell'Agenzia europea dell'ambiente (EEA) e li salva come
+`data/raw/CLC2018_foligno.tif` e `data/raw/CLC2018_roma.tif`. Ci mette meno di
+un minuto.
+
+### Strada 2, a mano dal portale Copernicus
+
+1. Vai su https://land.copernicus.eu, cerca **CORINE Land Cover 2018** e accedi
+   con EU Login (gratuito, senza carta di credito).
+2. Scegli il formato **Raster 100 m, GeoTIFF**, dataset per tutta l'Europa.
+   Il portale prepara il file e te lo fa trovare fra i tuoi download.
+3. Nello zip (nome simile a `u2018_clc2018_v2020_20u1_raster100m.zip`) apri la
+   cartella `DATA` e prendi il file `U2018_CLC2018_V2020_20u1.tif`.
+4. Mettilo in `data/raw/`. Lo script cerca qualunque `.tif` con `CLC2018` nel nome.
+
+### Poi: preparare le celle
+
+```
+.venv\Scripts\python scripts\prepare_static.py
+```
+
+Scarica da solo le tile del DEM Copernicus GLO-30 (circa 230 MB, dal bucket
+pubblico AWS, senza login) e scrive `data/celle.json`. Va rilanciato solo se
+cambi `config/aree.yaml`. Dopo, fai commit e push di `data/celle.json`.
+
+## Attivare GitHub Pages e Actions
+
+Per questo repository sono già attivi. Se rifai tutto su un repository nuovo:
+
+1. **Pages.** Su GitHub: *Settings > Pages > Build and deployment*.
+   *Source*: **Deploy from a branch**; *Branch*: **main**, cartella **/docs**;
+   *Save*. Dopo un paio di minuti il sito è su
+   `https://<utente>.github.io/<repository>/`.
+2. **Actions.** Il workflow è in `.github/workflows/aggiorna.yml` e parte da
+   solo alle 6 italiane. Il permesso di fare il commit dei punteggi è già
+   scritto nel file (`permissions: contents: write`): non serve cambiare
+   impostazioni.
+3. **Primo giro a mano.** Scheda *Actions > Aggiorna punteggi > Run workflow*.
+   Ci mette circa 9 minuti.
+
+Da sapere:
+
+- Il cron di GitHub usa l'ora UTC e non conosce l'ora legale: il workflow parte
+  alle 04:00 e alle 05:00 UTC e lo script lavora solo se in Italia sono passate
+  le 6 e oggi non l'ha ancora fatto. GitHub a volte parte con qualche decina di
+  minuti di ritardo.
+- Se il repository resta 60 giorni senza attività, GitHub può sospendere i
+  workflow programmati. In quel caso nella scheda *Actions* compare un pulsante
+  per riattivarlo.
+- Se una mattina l'aggiornamento non arriva, la app mostra un avviso giallo
+  "i dati sono di ieri".
+
+## Modificare le soglie delle specie
+
+Tutto sta in `config/specie.yaml`. Per esempio, per chiedere ai porcini estivi
+almeno 40 mm di pioggia invece di 30:
+
+```yaml
+  porcini_estivi:
+    pioggia_mm: 40
+```
+
+Cosa puoi cambiare per ogni specie:
+
+| Campo | Significato |
+|---|---|
+| `mesi_centrali` | mesi in cui la stagione vale 1 (1 = gennaio) |
+| `mesi_margine` | mesi in cui vale 0,5 |
+| `quota` | fascia ideale in metri, `[minimo, massimo]` |
+| `pioggia_mm` | pioggia in 14 giorni per avere il fattore pieno |
+| `temperatura` | intervallo ideale della temperatura media, `[min, max]` |
+| `habitat.adatte` | classi Corine che valgono 1 |
+| `habitat.parziali` | classi Corine che valgono 0,3 |
+
+Nella sezione `comune` ci sono le regole uguali per tutte le specie: quanti
+giorni di pioggia contare e con quanto ritardo, le rampe, i bonus.
+
+Dopo la modifica:
+
+```
+.venv\Scripts\python -m pytest                          # i test passano ancora?
+.venv\Scripts\python scripts\prova_storica.py --anni 2024   # come cambia su una stagione vera
+```
+
+Poi commit e push. La mappa cambia al prossimo aggiornamento delle 6, oppure
+subito se lanci il workflow a mano. Anche la tabella della pagina Info si
+aggiorna da sola.
+
+## Aggiungere una zona
+
+In `config/aree.yaml` copia un blocco `- nome: ...` e cambia i quattro numeri
+(`sud`, `nord`, `ovest`, `est`, in gradi decimali). Poi rilancia
+`scarica_corine.py` e `prepare_static.py`, e fai commit di `data/celle.json`.
+Occhio al peso: oggi ci sono 904 celle e `punteggi.json` pesa circa 600 KB, con
+un tetto di 1 MB. Il workflow si ferma con un errore se lo supera.
+
+## Comandi utili
+
+| Comando | Cosa fa |
+|---|---|
+| `python -m pytest` | lancia i test |
+| `python scripts/aggiorna_punteggi.py` | calcola i punteggi di oggi (circa 4 minuti) |
+| `python scripts/prova_storica.py` | punteggi su agosto-novembre 2023-2025 in 9 posti noti |
+| `python scripts/crea_icone.py` | ridisegna le icone (serve Pillow) |
+| `python -m http.server -d docs` | prova il sito in locale su http://localhost:8000 |
+
+## Fonti e licenze
+
+- Meteo: [Open-Meteo.com](https://open-meteo.com/), CC BY 4.0. Il piano gratuito vale per uso non commerciale.
+- Quota: Copernicus DEM GLO-30. © DLR e.V. 2010-2014 e © Airbus Defence and Space GmbH 2014-2018, fornito nell'ambito di COPERNICUS dall'Unione europea e dall'ESA.
+- Uso del suolo: Corine Land Cover 2018. © Unione europea, Copernicus Land Monitoring Service 2018, Agenzia europea dell'ambiente (EEA).
+- Mappa: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, con [Leaflet](https://leafletjs.com/).
