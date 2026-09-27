@@ -43,9 +43,9 @@
       </div>
 
       <h2>Come si calcola il punteggio</h2>
-      <p>La mappa è divisa in quadrati di circa 3 km di lato, e ognuno in 36 quadrati più piccoli da 500 m, che compaiono quando ingrandisci. Ogni mattina alle 6 FungoMeter calcola per ogni quadrato da 500 m e per ogni specie un punteggio da 0 a 100, per oggi e per i prossimi 7 giorni.</p>
+      <p>La mappa è divisa in quadrati da 500 m. Da lontano i colori si sfumano in un gradiente, e ogni punto prende il valore del quadrato migliore lì intorno, così i posti buoni restano visibili; da vicino si vedono i quadrati netti. Toccando la mappa si apre la scheda del quadrato toccato. Ogni mattina alle 6 FungoMeter calcola per ogni quadrato e per ogni specie un punteggio da 0 a 100, per oggi e per i prossimi 7 giorni.</p>
       <p class="formula">Punteggio = 100 × acqua × temperatura × stagione × habitat × quota × terreno</p>
-      <p>Ogni fattore vale fra 0 e 1. Basta un fattore a 0 perché il punteggio sia 0: per esempio fuori stagione, oppure dove non c'è l'ambiente giusto. Il meteo è quello del quadrato da 3 km; habitat, quota e terreno sono di ogni quadrato da 500 m. Il colore di un quadrato da 3 km è la media dei suoi quadrati migliori (il 25%).</p>
+      <p>Ogni fattore vale fra 0 e 1. Basta un fattore a 0 perché il punteggio sia 0: per esempio fuori stagione, oppure dove non c'è l'ambiente giusto. Habitat, quota e terreno sono di ogni quadrato da 500 m; il meteo è quello della zona di 3 km intorno, perché i modelli meteo non sono più precisi di così.</p>
       <ul>
         <li><strong>Acqua.</strong> Per il 60% è la pioggia degli ultimi <span data-regola="giorni_pioggia">26</span> giorni, che sale da 0 a 1 fino alla soglia della specie. Per il 40% è l'umidità del suolo fra 7 e 28 cm, dove vive il micelio: il modello meteo la calcola tenendo conto anche di quanto evapora. Ogni giorno con la massima oltre 30 °C nelle ultime due settimane toglie il 5%.</li>
         <li><strong>Temperatura.</strong> Si usa la media delle temperature degli ultimi <span data-regola="giorni_temperatura">20</span> giorni, su una curva a campana: vale 1 alla temperatura ottimale della specie e scende piano allontanandosi. C'è un piccolo bonus se dopo una pioggia la temperatura è calata di qualche grado.</li>
@@ -55,7 +55,7 @@
         <li><strong>Terreno.</strong> Dal modello del terreno a 30 m: canaloni e impluvi (dove si raccoglie l'acqua) valgono 1, i versanti a nord 0,95, a est e ovest 0,9, a sud 0,85, le creste 0,8, i pendii oltre 35 gradi 0,7. Quando ha piovuto molto la differenza si dimezza. Il pulsante "Canaloni" li mostra sulla mappa in blu.</li>
       </ul>
       <p>Il meteo dei prossimi giorni è una previsione: più il giorno è lontano, meno il punteggio è affidabile. I giorni da +5 in poi hanno il bordo tratteggiato.</p>
-      <p>Sotto ogni giorno c'è un indice: la media dei 10 quadrati migliori che hai sullo schermo in quel giorno. Si ricalcola quando sposti o ingrandisci la mappa, quindi parla della zona che stai guardando. La stella segna il giorno migliore; se i giorni sono tutti simili non c'è stella. Toccando un quadrato vedi anche il grafico dei suoi 8 giorni.</p>
+      <p>Sotto ogni giorno c'è un indice: la media dei 10 quadrati migliori di quel giorno, fra quelli che hai sullo schermo oppure, se hai selezionato una tua zona, fra quelli della tua zona. Per selezionarla passa alla modalità "Seleziona" (in alto a destra sulla mappa): tocca i quadrati o passaci sopra col dito; se chiudi un anello si riempie anche l'interno; toccando un quadrato già selezionato lo togli. La selezione resta salvata nel telefono. La stella segna il giorno migliore; se i giorni sono tutti simili non c'è stella. Toccando un quadrato vedi anche il grafico dei suoi 8 giorni.</p>
       <p>Puoi scegliere più specie insieme. In quel caso il colore dice quanto è probabile trovarne almeno una: 100 × (1 − (1 − A/100) × (1 − B/100) × …), dove A, B… sono i punteggi delle specie scelte. Non scende mai sotto la specie messa meglio e cresce se più specie sono favorite nello stesso posto. Le specie che non scegli non contano.</p>
 
       <h2>Da dove vengono i numeri</h2>

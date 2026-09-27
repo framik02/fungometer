@@ -260,7 +260,7 @@ button, select { font: inherit; color: inherit; }
 .messaggio {
   position: absolute;
   left: 50%;
-  top: 12px;
+  top: 56px;
   transform: translateX(-50%);
   z-index: 900;
   max-width: calc(100% - 32px);
@@ -278,6 +278,7 @@ button, select { font: inherit; color: inherit; }
 .scheda-aperta .legenda,
 .scheda-aperta .bottone-posizione,
 .scheda-aperta .bottone-canaloni,
+.scheda-aperta .modalita,
 .scheda-aperta .leaflet-control-zoom { display: none; }
 
 .leaflet-popup-content { margin: 12px 14px; font-size: 0.9rem; line-height: 1.35; }
@@ -397,3 +398,40 @@ button, select { font: inherit; color: inherit; }
   .riga-comandi { flex: 0 0 420px; }
   .giorni { margin-top: 0; }
 }
+
+/* --- Quadrati da 500 m ------------------------------------------------ */
+
+/* Da lontano il browser sfuma i pixel: gradiente */
+.leaflet-image-layer.quadrati { image-rendering: auto; }
+/* Da vicino ogni pixel resta un quadrato netto */
+.quadrati-netti .leaflet-image-layer.quadrati { image-rendering: pixelated; image-rendering: crisp-edges; }
+
+/* --- Modalità Mappa / Seleziona -------------------------------------- */
+
+.modalita {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 800;
+  display: flex;
+  gap: 0;
+  border-radius: 999px;
+  background: var(--superficie);
+  box-shadow: var(--ombra);
+  overflow: hidden;
+}
+.modalita button {
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--bosco);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.modalita button[aria-pressed="true"] { background: var(--bosco); color: #fff; }
+.modalita .svuota { color: #a33; border-left: 1px solid var(--bordo); }
+
+/* In modalità Seleziona il dito disegna invece di spostare la mappa */
+.selezionando #mappa { cursor: crosshair; touch-action: none; }
+.selezionando .leaflet-container { touch-action: none !important; }

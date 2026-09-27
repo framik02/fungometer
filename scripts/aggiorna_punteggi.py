@@ -5,9 +5,11 @@
 
 Legge:  data/celle.json e data/sottocelle.json (da prepare_static.py)
         config/specie.yaml
-Scrive: docs/data/punteggi.json            punteggi e meteo delle celle, cambia ogni giorno
+Scrive: docs/data/punteggi.json            meteo e fattori delle celle, cambia ogni giorno
         docs/data/celle.json               forma e dati fissi delle celle, per la mappa
-        docs/data/sottocelle/<zona>.json   dati fissi delle sottocelle, uno per zona
+        docs/data/statiche.json            6 numeri per sottocella: servono a colorare la mappa
+        docs/data/sottocelle/<zona>.json   schede complete delle sottocelle, una per zona
+                                           (l'app le scarica solo quando tocchi un quadrato)
 
 Formato di punteggi.json (scritto compatto per restare sotto 1 MB):
 {
@@ -23,10 +25,17 @@ Formato di punteggi.json (scritto compatto per restare sotto 1 MB):
       "tn": [8 x temperatura minima del giorno], "tx": [8 x massima],
       "tr": [8 x temperatura di riferimento, media degli ultimi 20 giorni],
       "s":  [una voce per specie, nello stesso ordine di "specie":
-             {"S": [8 punteggi della cella], "fa": [8 fattori acqua], "ft": [8 fattori temperatura]}]
+             {"fa": [8 fattori acqua], "ft": [8 fattori temperatura]}]
     }
   }
 }
+
+Formato di docs/data/statiche.json:
+{ "id cella": [36 x 6 numeri, sottocella dopo sottocella (per righe da sud a nord):
+               habitat x quota per ognuna delle 5 specie, poi il fattore terreno;
+               255 se la sottocella è acqua] }
+L'app calcola il punteggio di ogni quadrato da 500 m così:
+  100 x acqua x temperatura x stagione x (habitat x quota) x terreno
 
 Formato di docs/data/sottocelle/<zona>.json:
 { "id cella": [36 voci, per righe da sud a nord; null se la sottocella è acqua,
@@ -52,8 +61,6 @@ from fungometer.punteggio import (  # noqa: E402
     fattore_stagione,
     fattori_meteo,
     fattori_statici,
-    punteggio,
-    punteggio_cella,
 )
 
 GIORNI_PASSATI = 26  # la pioggia si somma su 26 giorni
@@ -123,13 +130,10 @@ def calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni):
             "tx": _arrotonda([meteo["tmax"][i] for i in indici], 1),
             "s": [],
         }
-        sottocelle = [s for s in statici[cella["id"]] if s is not None]
         for codice, sp in specie.items():
-            S, fa, ft = [], [], []
+            fa, ft = [], []
             for i, d in zip(indici, date_giorni):
                 mf = fattori_meteo(meteo, i, d, sp, comune)
-                punti = [punteggio(mf, s[codice], comune) for s in sottocelle]
-                S.append(round(punteggio_cella(punti, comune)))
                 fa.append(_cento(mf["acqua"]))
                 ft.append(_cento(mf["temperatura"]))
                 # Pioggia, suolo, caldo e temperatura non dipendono dalla specie
@@ -138,7 +142,7 @@ def calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni):
                     voce["u"].append(None if mf["suolo"] is None else round(mf["suolo"], 3))
                     voce["k"].append(mf["caldo"])
                     voce["tr"].append(None if mf["t_rif"] is None else round(mf["t_rif"], 1))
-            voce["s"].append({"S": S, "fa": fa, "ft": ft})
+            voce["s"].append({"fa": fa, "ft": ft})
         uscita_celle[cella["id"]] = voce
 
     return {
@@ -147,7 +151,6 @@ def calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni):
             "giorni_pioggia": comune["acqua"]["giorni_pioggia"],
             "giorni_temperatura": comune["temperatura"]["giorni_media"],
             "effetto_se_bagnato": comune["terreno"]["effetto_se_bagnato"],
-            "quota_migliori": comune["cella"]["quota_migliori"],
             "sottocelle_per_lato": SOTTOCELLE_PER_LATO,
         },
         "giorni": giorni,
@@ -159,10 +162,26 @@ def calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni):
 def celle_per_la_mappa(celle):
     """Versione ridotta di celle.json con quello che serve all'app."""
     return [
-        {"id": c["id"], "zona": c["zona"], "zona_id": c["zona_id"], "bbox": c["bbox"],
+        {"id": c["id"], "area": c["area"], "zona": c["zona"], "zona_id": c["zona_id"], "bbox": c["bbox"],
          "quota": c["quota"], "uso": c["uso"]}
         for c in celle
     ]
+
+
+def statiche_leggere(celle, statici, config):
+    """I 6 numeri per sottocella che servono a colorare la mappa (vedi in cima)."""
+    codici = list(config["specie"])
+    risultato = {}
+    for cella in celle:
+        numeri = []
+        for st in statici[cella["id"]]:
+            if st is None:
+                numeri.extend([255] * (len(codici) + 1))
+                continue
+            numeri.extend(_cento(st[c]["habitat"] * st[c]["quota"]) for c in codici)
+            numeri.append(_cento(st[codici[0]]["terreno"]))
+        risultato[cella["id"]] = numeri
+    return risultato
 
 
 def sottocelle_per_zona(celle, sottocelle, statici, config):
@@ -253,6 +272,7 @@ def main():
     dati = calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni)
     kb = scrivi_json(dati, uscita_punteggi)
     scrivi_json(celle_per_la_mappa(celle), RADICE / "docs" / "data" / "celle.json")
+    scrivi_json(statiche_leggere(celle, statici, config), RADICE / "docs" / "data" / "statiche.json")
     totale = 0
     for zona_id, contenuto in sottocelle_per_zona(celle, sottocelle, statici, config).items():
         totale += scrivi_json(contenuto, RADICE / "docs" / "data" / "sottocelle" / f"{zona_id}.json",
