@@ -107,6 +107,47 @@ button, select { font: inherit; color: inherit; }
   font-size: 1rem;
 }
 
+/* Scelta delle specie: riassunto che apre un pannello di caselle */
+.scelta-specie { position: relative; margin-top: 2px; }
+.scelta-specie summary {
+  list-style: none;
+  padding: 8px 28px 8px 10px;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  background: var(--superficie);
+  color: var(--testo);
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.scelta-specie summary::-webkit-details-marker { display: none; }
+.scelta-specie summary::after {
+  content: "▾";
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  color: var(--testo-tenue);
+}
+.pannello-specie {
+  position: absolute;
+  z-index: 1200;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 8px 10px;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  background: var(--superficie);
+  box-shadow: var(--ombra);
+}
+.casella { display: flex; align-items: center; gap: 8px; padding: 7px 2px; color: var(--testo); font-size: 1rem; }
+.casella input { width: 20px; height: 20px; accent-color: var(--bosco); }
+.pannello-specie .spiegazione { margin: 6px 0 0; font-size: 0.75rem; color: var(--testo-tenue); max-width: 30ch; }
+
 .aree { display: flex; gap: 4px; }
 .aree button {
   padding: 8px 10px;
@@ -254,6 +295,19 @@ button, select { font: inherit; color: inherit; }
 .scheda .barra span { display: block; height: 100%; background: var(--bosco); }
 .scheda .nota { margin-top: 8px; font-size: 0.75rem; color: var(--testo-tenue); }
 .scheda .elenco-specie { margin: 6px 0 0; padding: 0; list-style: none; }
+
+/* Grafico degli 8 giorni nella scheda */
+.grafico-giorni { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin: 4px 0 0; }
+.giorno-barra { display: flex; flex-direction: column; align-items: center; font-size: 0.65rem; color: var(--testo-tenue); }
+.giorno-barra .valore { font-weight: 600; color: var(--testo); white-space: nowrap; }
+.giorno-barra .colonna {
+  display: flex; align-items: flex-end; width: 100%; height: 44px;
+  border-radius: 3px; background: #f1ece3; overflow: hidden;
+}
+.giorno-barra .colonna span { display: block; width: 100%; }
+.giorno-barra.incerto .colonna { outline: 1px dashed var(--bordo); opacity: 0.75; }
+.giorno-barra.scelto .etichetta { color: var(--bosco); font-weight: 700; }
+.giorno-barra .etichetta { white-space: nowrap; }
 .scheda .elenco-specie li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px solid #eee7dc; font-size: 0.85rem; }
 
 /* --- Piede ------------------------------------------------------------ */

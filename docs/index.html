@@ -39,10 +39,17 @@
 
   <section class="comandi" aria-label="Scelta di specie e giorno">
     <div class="riga-comandi">
-      <label class="campo">
+      <div class="campo">
         <span>Specie</span>
-        <select id="scelta-specie"></select>
-      </label>
+        <!-- Pannello con una casella per specie: si apre toccando il riassunto -->
+        <details id="scelta-specie" class="scelta-specie">
+          <summary id="riassunto-specie">Specie</summary>
+          <div class="pannello-specie">
+            <div id="caselle-specie"></div>
+            <p class="spiegazione">Con più specie il colore dice quanto è probabile trovarne almeno una.</p>
+          </div>
+        </details>
+      </div>
       <div class="aree" role="group" aria-label="Vai all'area">
         <button type="button" data-area="foligno">Foligno</button>
         <button type="button" data-area="roma">Roma</button>

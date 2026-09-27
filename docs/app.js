@@ -20,9 +20,9 @@ const stato = {
   celle: [],            // da celle.json
   cellePerId: {},       // id -> cella
   punteggi: null,       // da punteggi.json
-  filtro: "0",          // "0".."4" = una specie; "media" o "migliore" = tutte le specie
+  scelte: [0],          // posizioni delle specie scelte (in punteggi.specie)
   giorno: 0,            // posizione del giorno scelto in punteggi.giorni
-  area: null,           // "foligno" o "roma": l'area per i giorni migliori
+  area: null,           // "foligno" o "roma": l'area inquadrata (per i pulsanti)
   rettangoli: {},       // id cella -> rettangolo Leaflet
   sottocelle: {},       // id zona -> dati delle sottocelle (caricati quando servono)
   strato: null,         // gruppo Leaflet con le sottocelle disegnate
@@ -139,19 +139,27 @@ function dataBreve(iso) {
 }
 
 // ---------------------------------------------------------------------------
-// Punteggi: di una specie oppure di tutte (media o la migliore)
+// Punteggi: di una specie o di più specie scelte insieme
 // ---------------------------------------------------------------------------
 
 /** È scelta una specie sola? Restituisce la sua posizione, altrimenti null. */
 function specieScelta() {
-  return /^\d+$/.test(stato.filtro) ? Number(stato.filtro) : null;
+  return stato.scelte.length === 1 ? stato.scelte[0] : null;
 }
 
-/** Combina i punteggi delle specie secondo il filtro scelto. */
+/**
+ * Combina i punteggi delle specie scelte: "almeno una".
+ *   combinato = 100 x (1 - (1 - A/100) x (1 - B/100) x ...)
+ * Si legge come se i punteggi fossero probabilità: la probabilità di trovarne
+ * almeno una. Resta fra 0 e 100, non scende mai sotto la specie messa meglio
+ * e cresce se più specie sono favorite nello stesso posto.
+ * Con una specie sola è esattamente il suo punteggio.
+ * `valori` ha un punteggio per ogni specie; contano solo quelle scelte.
+ */
 function combina(valori) {
-  if (stato.filtro === "media") return valori.reduce((a, b) => a + b, 0) / valori.length;
-  if (stato.filtro === "migliore") return Math.max(...valori);
-  return valori[Number(stato.filtro)];
+  let nessuna = 1;
+  stato.scelte.forEach((k) => { nessuna *= 1 - valori[k] / 100; });
+  return 100 * (1 - nessuna);
 }
 
 /** Punteggio di una cella (media delle sue sottocelle migliori) per un giorno. */
@@ -179,9 +187,9 @@ function punteggioSottocellaSpecie(idCella, sotto, k, giorno) {
 }
 
 function punteggioSottocella(idCella, sotto, giorno = stato.giorno) {
-  const n = stato.punteggi.specie.length;
+  // Calcola solo le specie scelte: le altre non entrano nel conto
   const valori = [];
-  for (let k = 0; k < n; k++) valori.push(punteggioSottocellaSpecie(idCella, sotto, k, giorno));
+  stato.scelte.forEach((k) => { valori[k] = punteggioSottocellaSpecie(idCella, sotto, k, giorno); });
   return combina(valori);
 }
 
@@ -259,31 +267,51 @@ function mostraAggiornamento() {
 }
 
 // ---------------------------------------------------------------------------
-// Filtro: una specie, oppure tutte (media o la migliore)
+// Scelta delle specie: una casella per specie
 // ---------------------------------------------------------------------------
 
 function preparaFiltro() {
-  const select = document.getElementById("scelta-specie");
-  stato.punteggi.specie.forEach((sp, i) => {
-    select.add(new Option(sp.nome, String(i)));
-  });
-  const gruppo = document.createElement("optgroup");
-  gruppo.label = "Tutte le specie";
-  gruppo.appendChild(new Option("Tutte: media", "media"));
-  gruppo.appendChild(new Option("Tutte: la specie migliore", "migliore"));
-  select.appendChild(gruppo);
+  const contenitore = document.getElementById("caselle-specie");
+  const specie = stato.punteggi.specie;
 
-  // Ricorda l'ultimo filtro scelto
-  const salvato = ricordato("filtro");
-  const valido = [...select.options].some((o) => o.value === salvato);
-  stato.filtro = valido ? salvato : "0";
-  select.value = stato.filtro;
+  // Ricorda le ultime specie scelte (per nome, così resta valido se l'ordine cambia)
+  let salvate = [];
+  try { salvate = JSON.parse(ricordato("specie-scelte") || "[]"); } catch (e) { salvate = []; }
+  const scelte = specie.map((sp, i) => (salvate.includes(sp.id) ? i : -1)).filter((i) => i >= 0);
+  stato.scelte = scelte.length ? scelte : [0];
 
-  select.addEventListener("change", () => {
-    stato.filtro = select.value;
-    ricorda("filtro", stato.filtro);
-    ricolora();
+  specie.forEach((sp, i) => {
+    const riga = document.createElement("label");
+    riga.className = "casella";
+    riga.innerHTML = `<input type="checkbox" value="${i}"> <span>${sp.nome}</span>`;
+    const casella = riga.querySelector("input");
+    casella.checked = stato.scelte.includes(i);
+    casella.addEventListener("change", () => {
+      const nuove = [...contenitore.querySelectorAll("input:checked")].map((c) => Number(c.value));
+      if (!nuove.length) {            // almeno una specie deve restare scelta
+        casella.checked = true;
+        messaggio("Scegli almeno una specie.");
+        return;
+      }
+      stato.scelte = nuove;
+      ricorda("specie-scelte", JSON.stringify(nuove.map((k) => specie[k].id)));
+      aggiornaRiassuntoSpecie();
+      ricolora();
+    });
+    contenitore.appendChild(riga);
   });
+  aggiornaRiassuntoSpecie();
+
+  // Il pannello si chiude toccando fuori
+  const pannello = document.getElementById("scelta-specie");
+  document.addEventListener("click", (ev) => {
+    if (pannello.open && !pannello.contains(ev.target)) pannello.open = false;
+  });
+}
+
+/** Testo del pulsante delle specie: il nome, oppure "Almeno una fra 2: ...". */
+function aggiornaRiassuntoSpecie() {
+  document.getElementById("riassunto-specie").textContent = titoloFiltro();
 }
 
 // ---------------------------------------------------------------------------
@@ -332,42 +360,74 @@ function aggiornaGiorni() {
   });
 }
 
+// Quanti quadrati entrano nell'indice del giorno
+const QUADRATI_INDICE = 10;
+
 /**
- * Indice di un giorno per l'area: media del 10% di celle migliori.
- * (Una media su tutte le celle sarebbe schiacciata da città e campi.)
+ * Punteggi di ogni giorno per i quadrati che si vedono sullo schermo:
+ * i quadrati da 500 m se la mappa è ingrandita, altrimenti quelli da 3 km.
+ * Restituisce un elenco di quadrati, ognuno con i suoi 8 punteggi.
  */
-function indiceGiorno(giorno, celle) {
-  const valori = celle.map((c) => punteggioCella(c.id, giorno)).sort((a, b) => b - a);
-  const n = Math.max(1, Math.round(valori.length * 0.1));
-  return valori.slice(0, n).reduce((a, b) => a + b, 0) / n;
+function quadratiVisibili() {
+  const vista = mappa.getBounds();
+  const giorni = stato.punteggi.giorni.map((_, g) => g);
+  if (mappa.getZoom() >= ZOOM_SOTTOCELLE && Object.keys(stato.disegnate).length) {
+    const elenco = [];
+    Object.entries(stato.disegnate).forEach(([id, sottocelle]) => {
+      sottocelle.forEach(({ rettangolo, dati }) => {
+        if (vista.intersects(rettangolo.getBounds())) {
+          elenco.push(giorni.map((g) => punteggioSottocella(id, dati, g)));
+        }
+      });
+    });
+    return elenco;
+  }
+  return celleVisibili().map((c) => giorni.map((g) => punteggioCella(c.id, g)));
 }
 
-/** Scrive l'indice sotto ogni giorno e mette la stella sul migliore. */
+/**
+ * Indice di ogni giorno: media dei 10 quadrati migliori sullo schermo quel giorno.
+ * Così parla della zona che stai guardando, a qualunque ingrandimento.
+ */
+function indiciDeiGiorni() {
+  const quadrati = quadratiVisibili();
+  return stato.punteggi.giorni.map((_, g) => {
+    const valori = quadrati.map((q) => q[g]).sort((a, b) => b - a).slice(0, QUADRATI_INDICE);
+    return valori.length ? valori.reduce((a, b) => a + b, 0) / valori.length : 0;
+  });
+}
+
+/** Posizioni dei giorni migliori (vuoto se i giorni sono tutti simili o tutti scarsi). */
+function giorniMigliori(valori) {
+  const massimo = Math.max(...valori);
+  const minimo = Math.min(...valori);
+  if (massimo < 10 || massimo - minimo < 3) return [];
+  return valori.map((v, i) => (v >= massimo - 1 ? i : -1)).filter((i) => i >= 0);
+}
+
+/** Scrive l'indice sotto ogni giorno e mette la stella sui migliori. */
 function segnaGiorniMigliori() {
-  const celle = stato.area ? stato.celle.filter((c) => c.id.startsWith(stato.area + "_")) : stato.celle;
-  const indici = stato.punteggi.giorni.map((_, g) => indiceGiorno(g, celle));
+  const indici = indiciDeiGiorni();
+  const migliori = giorniMigliori(indici);
   const massimo = Math.max(...indici);
-  const minimo = Math.min(...indici);
-  const nomeArea = stato.area === "roma" ? "Roma" : stato.area === "foligno" ? "Foligno" : "tutte le aree";
-  // La stella ha senso solo se i giorni sono davvero diversi fra loro
-  const differenze = massimo >= 10 && massimo - minimo >= 3;
 
   document.querySelectorAll("#giorni button").forEach((b, i) => {
-    const migliore = differenze && indici[i] >= massimo - 1;
+    const migliore = migliori.includes(i);
     b.classList.toggle("migliore", migliore);
     b.querySelector(".stella").textContent = migliore ? "★" : "";
     b.querySelector(".indice").textContent = Math.round(indici[i]);
-    b.title = (migliore ? "Giorno migliore" : "Indice") + ` per ${nomeArea}: ${Math.round(indici[i])}` +
+    b.title = `Media dei ${QUADRATI_INDICE} quadrati migliori sullo schermo: ${Math.round(indici[i])}` +
       (i >= GIORNO_INCERTO ? " (previsione incerta)" : "");
   });
   const nota = document.getElementById("nota-giorni");
-  const incerto = differenze && indici.slice(GIORNO_INCERTO).some((v) => v >= massimo - 1);
   if (massimo < 10) {
-    nota.textContent = `Condizioni sfavorevoli per tutta la settimana a ${nomeArea}`;
-  } else if (!differenze) {
-    nota.textContent = `Condizioni simili per tutta la settimana a ${nomeArea}`;
+    nota.textContent = "Condizioni sfavorevoli per tutta la settimana nella zona sullo schermo";
+  } else if (!migliori.length) {
+    nota.textContent = "Condizioni simili per tutta la settimana nella zona sullo schermo";
   } else {
-    nota.textContent = `★ giorno migliore per ${nomeArea}` + (incerto ? " (da +5 giorni la previsione è incerta)" : "");
+    const incerto = migliori.some((i) => i >= GIORNO_INCERTO);
+    nota.textContent = "★ giorno migliore nella zona sullo schermo" +
+      (incerto ? " (da +5 giorni la previsione è incerta)" : "");
   }
 }
 
@@ -395,10 +455,11 @@ function preparaMappa() {
   mappa.on("popupclose", () => contenitore.classList.remove("scheda-aperta"));
 
   // Quando la mappa si ferma: area corrente e sottocelle da mostrare
-  mappa.on("moveend", () => {
+  mappa.on("moveend", async () => {
     if (!stato.punteggi) return;
     aggiornaAreaDaMappa();
-    aggiornaSottocelle();
+    await aggiornaSottocelle();
+    segnaGiorniMigliori();
   });
 }
 
@@ -550,7 +611,6 @@ function impostaArea(area) {
   document.querySelectorAll(".aree button").forEach((b) => {
     b.setAttribute("aria-pressed", b.dataset.area === area ? "true" : "false");
   });
-  segnaGiorniMigliori();
 }
 
 /** L'area corrente è quella più vicina al centro della mappa. */
@@ -614,7 +674,9 @@ function intestazione(titolo, luogo, p) {
 function titoloFiltro() {
   const k = specieScelta();
   if (k !== null) return stato.punteggi.specie[k].nome;
-  return stato.filtro === "media" ? "Tutte le specie: media" : "Tutte le specie: la migliore";
+  if (stato.scelte.length === stato.punteggi.specie.length) return "Almeno una specie (tutte)";
+  return `Almeno una fra ${stato.scelte.length}: ` +
+    stato.scelte.map((i) => stato.punteggi.specie[i].nome).join(", ");
 }
 
 /** Righe con il meteo della cella nel giorno scelto. */
@@ -632,22 +694,33 @@ function righeMeteo(idCella) {
     <dt>Media ${r.giorni_temperatura} gg</dt><dd>${numero(m.tr[g], 1)} °C</dd>`;
 }
 
-/** Punteggio di ogni specie in una cella, dal più alto (per i filtri "tutte"). */
+/** Punteggio di ogni specie scelta, dal più alto (quando le specie sono più d'una). */
 function elencoSpecie(valori) {
-  return `<ul class="elenco-specie">` + stato.punteggi.specie
-    .map((sp, k) => ({ nome: sp.nome, p: valori[k] }))
+  return `<ul class="elenco-specie">` + stato.scelte
+    .map((k) => ({ nome: stato.punteggi.specie[k].nome, p: valori[k] }))
     .sort((a, b) => b.p - a.p)
     .map((x) => `<li><span>${x.nome}</span><strong style="color:${colore(x.p)}">${Math.round(x.p)}</strong></li>`)
     .join("") + `</ul>`;
 }
 
-/** Giorno migliore per questa cella, con il filtro scelto. */
-function giornoMiglioreCella(idCella) {
-  let migliore = 0;
-  stato.punteggi.giorni.forEach((_, g) => {
-    if (punteggioCella(idCella, g) > punteggioCella(idCella, migliore)) migliore = g;
-  });
-  return migliore;
+/**
+ * Piccolo grafico degli 8 giorni per un quadrato: una barra per giorno,
+ * stella sul giorno migliore, bordo tratteggiato per i giorni incerti.
+ */
+function graficoGiorni(valori) {
+  const migliori = giorniMigliori(valori);
+  const barre = valori.map((v, g) => {
+    const iso = stato.punteggi.giorni[g];
+    const classi = ["giorno-barra", g === stato.giorno ? "scelto" : "", g >= GIORNO_INCERTO ? "incerto" : ""].join(" ");
+    return `<div class="${classi}" title="${dataBreve(iso)}: ${Math.round(v)}">
+        <span class="valore">${migliori.includes(g) ? "★" : ""}${Math.round(v)}</span>
+        <span class="colonna"><span style="height:${Math.max(3, v)}%;background:${colore(v)}"></span></span>
+        <span class="etichetta">${iso === oggiIso() ? "oggi" : GIORNI_SETTIMANA[daIso(iso).getDay()]} ${daIso(iso).getDate()}</span>
+      </div>`;
+  }).join("");
+  const nota = migliori.length ? "★ giorno migliore per questo quadrato"
+    : Math.max(...valori) < 10 ? "Sfavorevole per tutta la settimana" : "Simile per tutta la settimana";
+  return `<div class="grafico-giorni">${barre}</div><p class="nota">${nota}</p>`;
 }
 
 function apriScheda(rettangolo, html) {
@@ -674,7 +747,7 @@ function apriSchedaCella(cella, rettangolo) {
       </ul>`
     : elencoSpecie(voci.map((v) => v.S[g]));
 
-  const gm = giornoMiglioreCella(cella.id);
+  const grafico = graficoGiorni(stato.punteggi.giorni.map((_, gg) => punteggioCella(cella.id, gg)));
   const html = `
     ${intestazione(titoloFiltro(), cella.zona, p)}
     <dl>
@@ -682,8 +755,8 @@ function apriSchedaCella(cella, rettangolo) {
       <dt>Quota</dt><dd>${cella.quota.media} m (da ${cella.quota.min} a ${cella.quota.max})</dd>
       <dt>Ambienti</dt><dd>${uso}</dd>
     </dl>
+    ${grafico}
     ${fattori}
-    <p class="nota"><strong>Giorno migliore qui:</strong> ${dataBreve(stato.punteggi.giorni[gm])} (${Math.round(punteggioCella(cella.id, gm))})</p>
     <p class="nota">Il punteggio della cella è la media delle sue parti migliori.
       <a href="#" data-ingrandisci>Ingrandisci</a> per vedere i quadrati da 500 m.
       <a href="info.html">Come si calcola</a></p>`;
@@ -723,6 +796,7 @@ function apriSchedaSottocella(cella, sotto, rettangolo) {
     const valori = stato.punteggi.specie.map((_, i) => punteggioSottocellaSpecie(cella.id, sotto, i, g));
     fattori = elencoSpecie(valori);
   }
+  const grafico = graficoGiorni(stato.punteggi.giorni.map((_, gg) => punteggioSottocella(cella.id, sotto, gg)));
 
   const html = `
     ${intestazione(titoloFiltro(), `${cella.zona}, quadrato da 500 m`, p)}
@@ -732,6 +806,7 @@ function apriSchedaSottocella(cella, sotto, rettangolo) {
       <dt>Terreno</dt><dd>pendenza media ${pendenza}°${canaloni ? `, canaloni ${canaloni}%` : ""}</dd>
       ${righeMeteo(cella.id)}
     </dl>
+    ${grafico}
     ${fattori}
     <p class="nota">Il meteo è quello del quadrato da 3 km che lo contiene. <a href="info.html">Come si calcola</a></p>`;
   apriScheda(rettangolo, html);
