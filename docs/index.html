@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>FungoMeter</title>
+  <meta name="description" content="Punteggio giornaliero delle condizioni per i funghi nei dintorni di Foligno e Roma.">
+  <meta name="theme-color" content="#2f4a2a">
+  <meta name="color-scheme" content="light">
+
+  <!-- App installabile (PWA) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icone/icona-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="icone/icona-180.png">
+
+  <!-- Leaflet (la libreria della mappa) da CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <link rel="stylesheet" href="stile.css">
+</head>
+<body>
+  <header class="testata">
+    <div class="marchio">
+      <img src="icone/icona-32.png" alt="" width="28" height="28">
+      <h1>FungoMeter</h1>
+    </div>
+    <div class="testata-azioni">
+      <button type="button" id="apri-avvertenze" class="bottone-avvertenze">Avvertenze</button>
+      <a href="info.html" class="link-info">Info</a>
+    </div>
+  </header>
+
+  <!-- Data dell'ultimo aggiornamento, sempre visibile -->
+  <div id="aggiornamento" class="aggiornamento">Caricamento dei dati…</div>
+  <div id="avviso-vecchio" class="avviso-vecchio" hidden></div>
+
+  <section class="comandi" aria-label="Scelta di specie e giorno">
+    <div class="riga-comandi">
+      <label class="campo">
+        <span>Specie</span>
+        <select id="scelta-specie"></select>
+      </label>
+      <div class="aree" role="group" aria-label="Vai all'area">
+        <button type="button" data-area="foligno">Foligno</button>
+        <button type="button" data-area="roma">Roma</button>
+      </div>
+    </div>
+    <div id="giorni" class="giorni" role="tablist" aria-label="Giorno"></div>
+  </section>
+
+  <main class="contenitore-mappa">
+    <div id="mappa" aria-label="Mappa dei punteggi"></div>
+
+    <button type="button" id="mia-posizione" class="bottone-posizione" title="La mia posizione">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <circle cx="12" cy="12" r="4" fill="currentColor"/>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/>
+      </svg>
+      <span>La mia posizione</span>
+    </button>
+
+    <div class="legenda" aria-label="Legenda">
+      <div class="legenda-barra"></div>
+      <div class="legenda-etichette"><span>0 sfavorevole</span><span>100 ottimo</span></div>
+    </div>
+
+    <div id="messaggio" class="messaggio" role="status" hidden></div>
+  </main>
+
+  <footer class="piede">
+    Il punteggio non garantisce ritrovamenti e l'app non riconosce i funghi.
+    <button type="button" class="link-avvertenze" data-apri-avvertenze>Leggi le avvertenze</button>
+  </footer>
+
+  <!-- Avvertenze: si aprono dal pulsante in alto o dal piede; al primo accesso si aprono da sole -->
+  <dialog id="avvertenze" class="finestra">
+    <h2>Prima di andare nel bosco</h2>
+    <ul class="lista-avvertenze">
+      <li><strong>Il punteggio non garantisce ritrovamenti.</strong> Stima solo se meteo, stagione, quota e ambiente sono favorevoli.</li>
+      <li><strong>L'app non identifica i funghi.</strong> Fai controllare ogni raccolta all'Ispettorato micologico della tua ASL: il controllo è gratuito.</li>
+      <li><strong>Ovolo buono e mazza di tamburo hanno sosia velenosi o mortali</strong> (per esempio l'Amanita muscaria da giovane e le piccole Lepiota). Nel dubbio non raccogliere e non mangiare.</li>
+      <li><strong>Rispetta le norme regionali</strong> di Umbria e Lazio: tesserino, quantità, giorni e orari di raccolta, aree protette. Informati presso il Comune o la Regione.</li>
+      <li><strong>Emergenze: chiama il 112.</strong> Per un sospetto avvelenamento puoi chiamare anche un Centro antiveleni, attivo giorno e notte:
+        <ul>
+          <li>Roma, Policlinico Gemelli: <a href="tel:+39063054343">06 3054343</a></li>
+          <li>Roma, Policlinico Umberto I: <a href="tel:+390649978000">06 49978000</a></li>
+          <li>Firenze, Careggi: <a href="tel:+390557947819">055 7947819</a></li>
+        </ul>
+      </li>
+    </ul>
+    <form method="dialog">
+      <button type="submit" class="bottone-primario">Ho capito</button>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

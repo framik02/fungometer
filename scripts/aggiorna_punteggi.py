@@ -73,6 +73,12 @@ def calcola(celle, config, date_meteo, meteo_per_cella, giorni):
             "nome": sp["nome"],
             "latino": sp["latino"],
             "ambiente": sp["ambiente"],
+            # Parametri mostrati nella pagina Info (sempre allineati a specie.yaml)
+            "mesi_centrali": sp["mesi_centrali"],
+            "mesi_margine": sp["mesi_margine"],
+            "quota": sp["quota"],
+            "pioggia_mm": sp["pioggia_mm"],
+            "temperatura": sp["temperatura"],
             "stagione": [
                 _cento(fattore_stagione(m, sp["mesi_centrali"], sp["mesi_margine"],
                                         comune["stagione"]))
@@ -116,6 +122,11 @@ def calcola(celle, config, date_meteo, meteo_per_cella, giorni):
 
     return {
         "aggiornato": datetime.now(FUSO).isoformat(timespec="seconds"),
+        "regole": {
+            "giorni_pioggia": comune["pioggia"]["giorni"],
+            "ritardo_pioggia": comune["pioggia"].get("ritardo", 0),
+            "giorni_temperatura": comune["temperatura"]["giorni_media"],
+        },
         "giorni": giorni,
         "specie": uscita_specie,
         "celle": uscita_celle,

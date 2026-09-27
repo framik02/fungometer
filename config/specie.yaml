@@ -33,7 +33,8 @@ comune:
     peso_margine: 0.5           # valore nei mesi di margine
 
 # Promemoria classi Corine usate:
-#   222 castagneti da frutto        311 boschi di latifoglie (querce, castagni, faggi)
+#   222 frutteti e frutti minori (castagneti da frutto, ma anche noccioleti e frutteti)
+#   311 boschi di latifoglie (querce, castagni, faggi)
 #   312 boschi di conifere (pini, abeti)   313 boschi misti
 #   231 prati stabili e pascoli     321 aree a pascolo naturale e praterie
 #   322 brughiere e cespuglieti     324 aree a vegetazione boschiva e arbustiva in evoluzione
@@ -54,8 +55,8 @@ specie:
     pioggia_mm: 30
     temperatura: [16, 24]
     habitat:
-      adatte: [311, 222]
-      parziali: [313]
+      adatte: [311]
+      parziali: [313, 222]
 
   porcini_autunnali:
     nome: "Porcini autunnali"
@@ -68,8 +69,8 @@ specie:
     temperatura: [10, 18]
     habitat:
       # Faggio con abete è l'habitat tipico: qui il bosco misto vale 1.
-      adatte: [311, 312, 313, 222]
-      parziali: []
+      adatte: [311, 312, 313]
+      parziali: [222]
 
   ovolo:
     nome: "Ovolo buono"
@@ -81,8 +82,8 @@ specie:
     pioggia_mm: 30
     temperatura: [18, 26]
     habitat:
-      adatte: [311, 222]
-      parziali: [313]
+      adatte: [311]
+      parziali: [313, 222]
 
   galletto:
     nome: "Galletto"
@@ -94,8 +95,8 @@ specie:
     pioggia_mm: 30
     temperatura: [14, 22]
     habitat:
-      adatte: [311, 222]
-      parziali: [313]
+      adatte: [311]
+      parziali: [313, 222]
 
   mazza_di_tamburo:
     nome: "Mazza di tamburo"
