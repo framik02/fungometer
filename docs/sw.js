@@ -12,7 +12,7 @@
  * il numero di VERSIONE.
  */
 
-const VERSIONE = "fungometer-v5";
+const VERSIONE = "fungometer-v6";
 
 const FILE_APP = [
   "./",
@@ -60,10 +60,13 @@ self.addEventListener("fetch", (evento) => {
     return;
   }
 
-  // File dell'app e dati: prima la rete, poi la copia salvata
+  // File dell'app e dati: prima la rete, poi la copia salvata.
+  // "no-cache" fa chiedere sempre al server se il file è cambiato, invece di
+  // usare la copia del browser (GitHub Pages la terrebbe per 10 minuti).
+  // Se non è cambiato, la risposta del server è minuscola.
   if (url.origin === self.location.origin) {
     evento.respondWith(
-      fetch(richiesta)
+      fetch(richiesta.url, { cache: "no-cache", credentials: "same-origin" })
         .then((risposta) => {
           if (!risposta.ok) return risposta;
           const copia = risposta.clone();

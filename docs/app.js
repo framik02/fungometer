@@ -1111,6 +1111,8 @@ async function apriSchedaQuadrato(q) {
         <span class="giudizio">${giudizio(p)}</span>
         ${etichettaTendenza(tendenza(q.cella, q.k))}
       </div>
+      <a class="bottone-secondario indicazioni" target="_blank" rel="noopener"
+         href="https://www.google.com/maps/dir/?api=1&destination=${centro.lat.toFixed(5)},${centro.lng.toFixed(5)}">Indicazioni per arrivare qui</a>
       <dl>
         <dt>Ambienti</dt><dd>${ambienti || "n.d."}</dd>
         <dt>Quota</dt><dd>circa ${quota} m</dd>
@@ -1368,7 +1370,18 @@ function preparaAvvertenze() {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Service worker:", e));
+    // updateViaCache "none": il browser chiede sempre al server se sw.js è cambiato
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+      .then((reg) => reg.update())
+      .catch((e) => console.warn("Service worker:", e));
+  });
+  // Quando si attiva una versione nuova dell'app, ricarica la pagina una volta sola
+  let ricaricata = false;
+  const cera = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!cera || ricaricata) return;   // al primissimo accesso non serve ricaricare
+    ricaricata = true;
+    window.location.reload();
   });
 }
 
