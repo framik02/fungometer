@@ -5,6 +5,7 @@
 #   05:00 UTC = 06:00 in Italia d'inverno (CET)
 # Quindi partiamo a entrambi gli orari e lo script, con --controlla-ora,
 # lavora solo se in Italia sono passate le 6 e oggi non l'ha ancora fatto.
+# Il minuto 17 evita il picco di carico all’inizio dell’ora su GitHub Actions.
 # GitHub a volte avvia i cron con qualche decina di minuti di ritardo: è normale.
 #
 # Si può lanciare anche a mano: scheda Actions > Aggiorna punteggi > Run workflow.
@@ -13,8 +14,8 @@ name: Aggiorna punteggi
 
 on:
   schedule:
-    - cron: "0 4 * * *"
-    - cron: "0 5 * * *"
+    - cron: "17 4 * * *"
+    - cron: "17 5 * * *"
   workflow_dispatch:
 
 # Serve per fare il commit del nuovo punteggi.json
