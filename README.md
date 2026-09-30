@@ -163,7 +163,7 @@ Cosa puoi cambiare per ogni specie:
 Nella sezione `comune` ci sono le regole uguali per tutte le specie: giorni di
 pioggia e di temperatura, peso di pioggia e umidità del suolo, giorni di caldo,
 pesi delle forme del terreno, quota delle sottocelle migliori che fanno il
-punteggio della cella. L'elenco dei codici degli ambienti è in cima al file.
+punteggio della cella. L'elenco dei codici degli ambienti è in cima al file. Sempre in `comune`, `stagione` sposta il calendario con la quota (giorni ogni 100 m rispetto a 600 m) e `gelo` decide quanto le notti sotto zero chiudono la stagione.
 
 Dopo la modifica:
 
@@ -193,6 +193,7 @@ supera.
 | `python -m pytest` | lancia i test |
 | `python scripts/aggiorna_punteggi.py` | calcola i punteggi di oggi (circa 6 minuti) |
 | `python scripts/prova_storica.py` | punteggi su agosto-novembre 2023-2025 in 9 posti noti, nella loro sottocella |
+| `python scripts/scarica_aree_protette.py` | riscarica i confini di parchi, riserve e siti Natura 2000 (EEA) |
 | `python scripts/crea_icone.py` | ridisegna le icone (serve Pillow) |
 | `python -m http.server -d docs` | prova il sito in locale su http://localhost:8000 |
 
@@ -204,3 +205,6 @@ supera.
 - Tipi di bosco: Carta forestale su base tipologica, Regione Lazio; Carta geobotanica, Regione Umbria e Università di Camerino.
 - Finestre di pioggia e temperatura: Brejon Lamartiniere e Hoffman (2025), *Predicting porcini*, bioRxiv, doi:10.64898/2025.12.12.693895.
 - Mappa: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, con [Leaflet](https://leafletjs.com/).
+- Mappa topografica: © [OpenTopoMap](https://opentopomap.org) (CC-BY-SA); sentieri: © [Waymarked Trails](https://hiking.waymarkedtrails.org) (CC-BY-SA).
+- Aree protette: NatDA e Natura 2000, © Agenzia europea dell'ambiente (EEA).
+- Ricerca dei posti: [Photon](https://photon.komoot.io) di komoot, dati OpenStreetMap.
