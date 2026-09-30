@@ -99,7 +99,7 @@ def prova_anno(anno, scelti, config):
             giornalieri = []
             for i in range(primo, len(date_meteo)):
                 giorno = date.fromisoformat(date_meteo[i])
-                mf = fattori_meteo(meteo, i, giorno, sp, comune)
+                mf = fattori_meteo(meteo, i, giorno, sp, comune, quota=sotto["q"][1])
                 s = punteggio(mf, statici, comune)
                 giornalieri.append(s)
                 righe_csv.append({

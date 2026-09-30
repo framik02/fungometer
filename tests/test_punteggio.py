@@ -18,6 +18,8 @@ sys.path.insert(0, str(RADICE))
 
 from fungometer.griglia import bbox_sottocella  # noqa: E402
 from fungometer.punteggio import (  # noqa: E402
+    fattore_gelo,
+    notti_di_gelo,
     calo_termico_dopo_pioggia,
     campana,
     carica_specie,
@@ -231,6 +233,54 @@ def test_stagione_senza_salti():
                 assert abs(valore - prima) <= 1 / 28 + 1e-9, (sp["nome"], giorno)
             prima = valore
             giorno = date.fromordinal(giorno.toordinal() + 1)
+
+
+def test_stagione_si_sposta_con_la_quota():
+    sp = SPECIE["porcini_estivi"]          # specie estiva: stagione piena giugno-settembre
+    regole = COMUNE["stagione"]
+    s = lambda giorno, quota: fattore_stagione(giorno, sp["mesi_centrali"], sp["mesi_margine"], quota, regole)
+    # alla quota di riferimento il calendario non cambia
+    assert s(date(2026, 10, 16), 600) == stagione(sp, date(2026, 10, 16))
+    # 1.200 m = 18 giorni: a metà ottobre in alto la stagione è quasi finita
+    assert s(date(2026, 10, 16), 1200) < s(date(2026, 10, 16), 600) - 0.4
+    # in basso (300 m) finisce più tardi
+    assert s(date(2026, 10, 16), 300) > s(date(2026, 10, 16), 600)
+    # specie estiva: in alto comincia dopo
+    assert s(date(2026, 5, 20), 1200) < s(date(2026, 5, 20), 600)
+
+
+def test_stagione_autunnale_in_alto_comincia_prima():
+    sp = SPECIE["porcini_autunnali"]       # stagione piena ottobre
+    regole = COMUNE["stagione"]
+    s = lambda giorno, quota: fattore_stagione(giorno, sp["mesi_centrali"], sp["mesi_margine"], quota, regole)
+    assert s(date(2026, 9, 15), 1500) > s(date(2026, 9, 15), 600)
+    assert s(date(2026, 11, 15), 1500) < s(date(2026, 11, 15), 600)
+
+
+def test_gelo():
+    regole = COMUNE["gelo"]
+    meteo = meteo_costante(tmed=5)
+    meteo["tmin"] = [3] * GIORNI
+    assert notti_di_gelo(meteo, 30, regole) == 0
+    for g in (27, 29, 30):
+        meteo["tmin"][g] = -2
+    assert notti_di_gelo(meteo, 30, regole) == 3
+    assert fattore_gelo(0, regole) == 1.0
+    assert fattore_gelo(1, regole) == 1.0          # la prima notte non conta
+    assert fattore_gelo(3, regole) == pytest.approx(0.4)
+    assert fattore_gelo(5, regole) == 0.0
+
+
+def test_gelo_chiude_la_stagione_nel_punteggio():
+    sp = SPECIE["porcini_autunnali"]
+    statici = fattori_statici(SOTTOCELLA_FAGGETA, sp, COMUNE)
+    meteo = meteo_costante(pioggia=5, tmed=13, suolo=0.35)
+    senza = punteggio(fattori_meteo(meteo, 30, date(2026, 10, 15), sp, COMUNE), statici, COMUNE)
+    for g in range(26, 31):
+        meteo["tmin"][g] = -3
+    con = punteggio(fattori_meteo(meteo, 30, date(2026, 10, 15), sp, COMUNE), statici, COMUNE)
+    assert senza == pytest.approx(100)
+    assert con == 0
 
 
 def test_stagione_media_del_margine_circa_meta():

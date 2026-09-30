@@ -317,7 +317,8 @@ function punteggioSpecie(cella, k, specie, giorno) {
   const voce = stato.punteggi.celle[cella.id].s[specie];
   const acqua = voce.fa[giorno] / 100;
   const temperatura = voce.ft[giorno] / 100;
-  const stagione = stato.punteggi.specie[specie].stagione[giorno] / 100;
+  // Stagione della cella (quota e gelo compresi); nei dati vecchi, quella della specie
+  const stagione = (voce.fs ? voce.fs[giorno] : stato.punteggi.specie[specie].stagione[giorno]) / 100;
   const habitatQuota = dati[base + specie] / 100;
   const effetto = stato.punteggi.regole.effetto_se_bagnato;
   const terreno = 1 - (1 - dati[base + 5] / 100) * (1 - effetto * acqua);
@@ -1097,7 +1098,8 @@ function righeMeteo(idCella) {
     <dt>Pioggia</dt><dd>${numero(m.p[g])} mm in ${r.giorni_pioggia} giorni${soglia}</dd>
     <dt>Suolo</dt><dd>umidità ${numero(m.u[g], 2)} m³/m³${caldo}</dd>
     <dt>Temperature</dt><dd>min ${numero(m.tn[g], 1)} °C, max ${numero(m.tx[g], 1)} °C</dd>
-    <dt>Media ${r.giorni_temperatura} gg</dt><dd>${numero(m.tr[g], 1)} °C</dd>`;
+    <dt>Media ${r.giorni_temperatura} gg</dt><dd>${numero(m.tr[g], 1)} °C</dd>
+    ${m.g && m.g[g] ? `<dt>Gelo</dt><dd>${m.g[g]} ${m.g[g] === 1 ? "notte" : "notti"} sotto zero nell'ultima settimana</dd>` : ""}`;
 }
 
 /** Punteggio di ogni specie scelta, dal più alto (quando le specie sono più d'una). */
@@ -1164,7 +1166,7 @@ async function apriSchedaQuadrato(q) {
     fattori = `<ul class="fattori">
         ${barraFattore("Acqua", voce.fa[g])}
         ${barraFattore("Temperatura", voce.ft[g])}
-        ${barraFattore("Stagione", stato.punteggi.specie[k].stagione[g])}
+        ${barraFattore("Stagione", voce.fs ? voce.fs[g] : stato.punteggi.specie[k].stagione[g])}
         ${barraFattore("Habitat", habitat[k])}
         ${barraFattore("Quota", quote[k])}
         ${barraFattore("Terreno", Math.round(terrenoEff))}

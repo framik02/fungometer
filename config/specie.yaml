@@ -60,6 +60,20 @@ comune:
     effetto_se_bagnato: 0.5
   cella:
     quota_migliori: 25          # punteggio della cella = media del 25% di sottocelle migliori
+  stagione:
+    # Il calendario delle specie (mesi qui sotto) vale per questa quota.
+    quota_riferimento: 600
+    # Ogni 100 m più in alto la stagione finisce questi giorni prima; comincia
+    # dopo per le specie estive (aspettano il caldo) e prima per quelle
+    # autunnali (partono col fresco). Stima dalla legge bioclimatica di
+    # Hopkins (circa 4 giorni ogni 122 m di quota), non misurata sui funghi.
+    giorni_per_100m: 3
+    ultimo_mese_estivo: 7       # le specie con stagione piena da luglio in giù sono "estive"
+  gelo:
+    soglia_tmin: 0              # una notte di gelo ha la minima a 0 °C o sotto
+    giorni: 7                   # si contano le notti di gelo dell'ultima settimana
+    notti_tollerate: 1          # la prima notte di gelo non conta
+    penalita_per_notte: 0.3     # ogni notte in più toglie il 30% alla stagione
 
 # Ambienti (usati in habitat qui sotto):
 #   t = tipo di bosco dalle carte regionali (Lazio: carta forestale;

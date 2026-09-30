@@ -24,8 +24,10 @@ Formato di punteggi.json (scritto compatto per restare sotto 1 MB):
       "k":  [8 x giorni di caldo nelle ultime 2 settimane],
       "tn": [8 x temperatura minima del giorno], "tx": [8 x massima],
       "tr": [8 x temperatura di riferimento, media degli ultimi 20 giorni],
+      "g":  [8 x notti di gelo nell'ultima settimana],
       "s":  [una voce per specie, nello stesso ordine di "specie":
-             {"fa": [8 fattori acqua], "ft": [8 fattori temperatura]}]
+             {"fa": [8 fattori acqua], "ft": [8 fattori temperatura],
+              "fs": [8 fattori stagione per la quota della cella, gelo compreso]}]
     }
   }
 }
@@ -125,16 +127,17 @@ def calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni):
     for cella in celle:
         meteo = meteo_per_cella[cella["id"]]
         voce = {
-            "p": [], "u": [], "k": [], "tr": [],
+            "p": [], "u": [], "k": [], "tr": [], "g": [],
             "tn": _arrotonda([meteo["tmin"][i] for i in indici], 1),
             "tx": _arrotonda([meteo["tmax"][i] for i in indici], 1),
             "s": [],
         }
         for codice, sp in specie.items():
-            fa, ft = [], []
+            fa, ft, fs = [], [], []
             for i, d in zip(indici, date_giorni):
-                mf = fattori_meteo(meteo, i, d, sp, comune)
+                mf = fattori_meteo(meteo, i, d, sp, comune, quota=cella["quota"]["media"])
                 fa.append(_cento(mf["acqua"]))
+                fs.append(_cento(mf["stagione"]))
                 ft.append(_cento(mf["temperatura"]))
                 # Pioggia, suolo, caldo e temperatura non dipendono dalla specie
                 if len(voce["p"]) < len(indici):
@@ -142,7 +145,8 @@ def calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni):
                     voce["u"].append(None if mf["suolo"] is None else round(mf["suolo"], 3))
                     voce["k"].append(mf["caldo"])
                     voce["tr"].append(None if mf["t_rif"] is None else round(mf["t_rif"], 1))
-            voce["s"].append({"fa": fa, "ft": ft})
+                    voce["g"].append(mf["gelo"])
+            voce["s"].append({"fa": fa, "ft": ft, "fs": fs})
         uscita_celle[cella["id"]] = voce
 
     return {

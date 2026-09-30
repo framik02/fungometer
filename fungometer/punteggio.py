@@ -18,7 +18,7 @@ lunghe uguali e nello stesso ordine di date:
 """
 
 import math
-from datetime import date
+from datetime import date, timedelta
 
 import yaml
 
@@ -140,7 +140,7 @@ def _primo_del_mese(anno, mese):
     return date(anno, (mese - 1) % 12 + 1, 1)
 
 
-def fattore_stagione(giorno, mesi_centrali, mesi_margine):
+def fattore_stagione(giorno, mesi_centrali, mesi_margine, quota=None, regole=None):
     """Quanto il giorno è dentro la stagione della specie, in modo graduale.
 
     - nei mesi centrali vale 1;
@@ -150,9 +150,27 @@ def fattore_stagione(giorno, mesi_centrali, mesi_margine):
     - fuori vale 0.
     In media un mese di margine vale 0,5, ma senza salti da un giorno all'altro.
     `giorno` è una data (datetime.date).
+
+    Con `quota` e `regole` il calendario si sposta con l'altitudine: ogni 100 m
+    sopra la quota di riferimento la fine arriva prima, e l'inizio arriva dopo
+    per le specie estive e prima per quelle autunnali. Lo spostamento si fa
+    valutando il calendario in un giorno anticipato o posticipato.
     """
     if not mesi_centrali:
         return 0.0
+    if quota is not None and regole:
+        spostamento = (quota - regole["quota_riferimento"]) / 100 * regole["giorni_per_100m"]
+        estiva = min(mesi_centrali) <= regole["ultimo_mese_estivo"]
+        anno = giorno.year
+        meta = _primo_del_mese(anno, min(mesi_centrali)) + (
+            _primo_del_mese(anno, max(mesi_centrali) + 1) - _primo_del_mese(anno, min(mesi_centrali))) / 2
+        if giorno < meta:
+            # inizio: dopo (estive) o prima (autunnali) quando si sale
+            ritardo = spostamento if estiva else -spostamento
+        else:
+            # fine: sempre prima quando si sale
+            ritardo = -spostamento
+        return fattore_stagione(giorno - timedelta(days=round(ritardo)), mesi_centrali, mesi_margine)
     anno = giorno.year
     primo, ultimo = min(mesi_centrali), max(mesi_centrali)
     inizio = _primo_del_mese(anno, primo)          # primo giorno della stagione piena
@@ -177,6 +195,19 @@ def fattore_stagione(giorno, mesi_centrali, mesi_margine):
         return 0.0
     arrivo = _primo_del_mese(anno, ultimo + 1 + dopo)
     return max(0.0, min(1.0, (arrivo - giorno).days / (arrivo - fine).days))
+
+
+def notti_di_gelo(meteo, i, regole):
+    """Notti con la minima a 0 °C o sotto nell'ultima settimana (giorno i compreso)."""
+    return sum(1 for t in _finestra(meteo["tmin"], i, regole["giorni"])
+               if t is not None and t <= regole["soglia_tmin"])
+
+
+def fattore_gelo(notti, regole):
+    """Il gelo chiude la stagione: la prima notte non conta, ogni notte in più
+    toglie il 30% (con i valori predefiniti). Dopo 4 notti resta il 10%."""
+    eccesso = max(0, notti - regole["notti_tollerate"])
+    return max(0.0, 1 - regole["penalita_per_notte"] * eccesso)
 
 
 # ---------------------------------------------------------------------------
@@ -254,16 +285,22 @@ def fattori_statici(sottocella, specie, comune):
     }
 
 
-def fattori_meteo(meteo, i, giorno, specie, comune):
+def fattori_meteo(meteo, i, giorno, specie, comune, quota=None):
     """Acqua, temperatura e stagione di una cella per un giorno e una specie.
 
-    `giorno` è la data (datetime.date) corrispondente alla posizione i.
+    `giorno` è la data (datetime.date) corrispondente alla posizione i;
+    `quota` (m) è la quota media della cella: sposta il calendario della
+    stagione. La stagione tiene conto anche delle notti di gelo.
     """
     f_acqua, pioggia, suolo, caldo = fattore_acqua(meteo, i, specie["pioggia_mm"], comune["acqua"])
     f_temp, t_rif = fattore_temperatura(meteo, i, specie, comune["temperatura"])
-    f_stagione = fattore_stagione(giorno, specie["mesi_centrali"], specie["mesi_margine"])
+    f_stagione = fattore_stagione(giorno, specie["mesi_centrali"], specie["mesi_margine"],
+                                  quota, comune.get("stagione"))
+    gelo = notti_di_gelo(meteo, i, comune["gelo"]) if "gelo" in comune else 0
+    if "gelo" in comune:
+        f_stagione *= fattore_gelo(gelo, comune["gelo"])
     return {
-        "acqua": f_acqua, "temperatura": f_temp, "stagione": f_stagione,
+        "acqua": f_acqua, "temperatura": f_temp, "stagione": f_stagione, "gelo": gelo,
         "pioggia_mm": pioggia, "suolo": suolo, "caldo": caldo, "t_rif": t_rif,
     }
 
