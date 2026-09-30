@@ -636,10 +636,33 @@ function preparaMappa() {
   const baseScelta = basi[ricordato("mappa-base")] ? ricordato("mappa-base") : "Stradale";
   basi[baseScelta].addTo(mappa);
   if (ricordato("sentieri") === "si") sentieri.addTo(mappa);
-  L.control.layers(basi, { "Sentieri": sentieri }, { position: "topleft" }).addTo(mappa);
+  // Aree protette: i confini si scaricano solo quando accendi lo strato
+  const protette = L.layerGroup();
+  protette.on("add", async () => {
+    if (protette.getLayers().length) return;
+    const dati = await caricaAreeProtette();
+    if (!dati) return;
+    L.geoJSON(dati, {
+      interactive: false,
+      style: (f) => f.properties.tipo === "parco"
+        ? { color: "#6a1b9a", weight: 2, dashArray: "6 4", fillColor: "#6a1b9a", fillOpacity: 0.06 }
+        : { color: "#00796b", weight: 1.5, dashArray: "2 4", fill: false },
+    }).addTo(protette);
+  });
+  if (ricordato("protette") === "si") protette.addTo(mappa);
+  L.control.layers(basi, { "Sentieri": sentieri, "Aree protette": protette }, { position: "topleft" }).addTo(mappa);
   mappa.on("baselayerchange", (ev) => ricorda("mappa-base", ev.name));
-  mappa.on("overlayadd", (ev) => { if (ev.layer === sentieri) ricorda("sentieri", "si"); });
-  mappa.on("overlayremove", (ev) => { if (ev.layer === sentieri) ricorda("sentieri", "no"); });
+  mappa.on("overlayadd", (ev) => {
+    if (ev.layer === sentieri) ricorda("sentieri", "si");
+    if (ev.layer === protette) {
+      ricorda("protette", "si");
+      messaggio("Viola tratteggiato: parchi e riserve. Verde puntinato: siti Natura 2000.", 5000);
+    }
+  });
+  mappa.on("overlayremove", (ev) => {
+    if (ev.layer === sentieri) ricorda("sentieri", "no");
+    if (ev.layer === protette) ricorda("protette", "no");
+  });
 
   stato.stratoSelezione = L.layerGroup().addTo(mappa);
 
@@ -1131,6 +1154,64 @@ function graficoGiorni(valori) {
   return `<div class="grafico-giorni">${barre}</div><p class="nota">${nota}</p>`;
 }
 
+// ---------------------------------------------------------------------------
+// Aree protette (parchi, riserve, siti Natura 2000)
+// ---------------------------------------------------------------------------
+
+let areeProtette = null;
+
+/** Scarica (una volta sola) i confini delle aree protette; null se non riesce. */
+async function caricaAreeProtette() {
+  if (!areeProtette) {
+    try { areeProtette = await caricaJson("data/aree_protette.json"); } catch (e) { return null; }
+  }
+  return areeProtette;
+}
+
+/** Vero se il punto sta dentro l'anello (regola del raggio: conta gli attraversamenti). */
+function dentroAnello(lat, lon, anello) {
+  let dentro = false;
+  for (let i = 0, j = anello.length - 1; i < anello.length; j = i++) {
+    const [xi, yi] = anello[i], [xj, yj] = anello[j];
+    if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) dentro = !dentro;
+  }
+  return dentro;
+}
+
+function dentroPoligono(lat, lon, poligono) {
+  // Il primo anello è il bordo, gli altri sono buchi
+  return dentroAnello(lat, lon, poligono[0]) && !poligono.slice(1).some((b) => dentroAnello(lat, lon, b));
+}
+
+/** Aree protette che contengono il punto. */
+async function areeProtetteInPunto(punto) {
+  const dati = await caricaAreeProtette();
+  if (!dati) return [];
+  const trovate = [];
+  dati.features.forEach((f) => {
+    const g = f.geometry;
+    const poligoni = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
+    if (poligoni.some((pol) => dentroPoligono(punto.lat, punto.lng, pol))) trovate.push(f.properties);
+  });
+  // Una volta sola per nome (lo stesso parco può comparire in due aree)
+  return trovate.filter((a, i) => trovate.findIndex((b) => b.nome === a.nome) === i);
+}
+
+/** Righe della scheda sulle aree protette, con i link alle regole. */
+function righeAreeProtette(aree) {
+  if (!aree.length) return "";
+  const voci = aree.map((a) => {
+    const nome = testoSicuro(a.nome);
+    if (a.tipo === "natura2000") {
+      return `<a href="https://natura2000.eea.europa.eu/Natura2000/SDF.aspx?site=${encodeURIComponent(a.codice)}" target="_blank" rel="noopener">${nome}</a> (Natura 2000)`;
+    }
+    const cerca = encodeURIComponent(`${a.nome} regolamento raccolta funghi`);
+    return `<a href="https://www.google.com/search?q=${cerca}" target="_blank" rel="noopener">${nome}</a>`;
+  });
+  return `<div class="area-protetta"><strong>Area protetta:</strong> ${voci.join(", ")}.
+    La raccolta può avere regole proprie: verificale sul sito dell'ente prima di andare.</div>`;
+}
+
 /** Scarica (una volta sola) le schede complete dei quadrati di una zona. */
 async function schedeDellaZona(zonaId) {
   if (!stato.schede[zonaId]) stato.schede[zonaId] = await caricaJson(`data/sottocelle/${zonaId}.json`);
@@ -1143,9 +1224,12 @@ async function apriSchedaQuadrato(q) {
   if (stato.evidenziato) stato.evidenziato.remove();
   stato.evidenziato = L.rectangle(limiti, { color: "#1b2a4a", weight: 2, fill: false, interactive: false }).addTo(mappa);
 
-  let scheda;
+  let scheda, protette;
   try {
-    scheda = (await schedeDellaZona(q.cella.zona_id))[q.cella.id][q.k];
+    [scheda, protette] = await Promise.all([
+      schedeDellaZona(q.cella.zona_id).then((z) => z[q.cella.id][q.k]),
+      areeProtetteInPunto(centro),
+    ]);
   } catch (errore) {
     messaggio("Non riesco a caricare la scheda di questo quadrato.");
     return;
@@ -1185,6 +1269,7 @@ async function apriSchedaQuadrato(q) {
         <span class="giudizio">${giudizio(p)}</span>
         ${etichettaTendenza(tendenza(q.cella, q.k))}
       </div>
+      ${righeAreeProtette(protette)}
       <a class="bottone-secondario indicazioni" target="_blank" rel="noopener"
          href="https://www.google.com/maps/dir/?api=1&destination=${centro.lat.toFixed(5)},${centro.lng.toFixed(5)}">Indicazioni per arrivare qui</a>
       <dl>

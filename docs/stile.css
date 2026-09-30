@@ -562,6 +562,11 @@ button, select { font: inherit; color: inherit; }
 .vicini-azioni { display: flex; gap: 8px; margin-top: 8px; }
 .vicini-azioni .bottone-primario { flex: 1; width: auto; padding: 8px; }
 .scheda .indicazioni { display: block; margin: 0 0 8px; font-size: 0.9rem; }
+.scheda .area-protetta {
+  margin: 0 0 8px; padding: 6px 8px; border-radius: 8px;
+  background: #f3e8f7; border-left: 3px solid #6a1b9a; font-size: 0.8rem; line-height: 1.35;
+}
+.scheda .area-protetta a { color: #6a1b9a; }
 
 .bottone-secondario {
   flex: 1; padding: 8px; border: 1px solid var(--bosco); border-radius: var(--raggio);
@@ -584,3 +589,6 @@ button, select { font: inherit; color: inherit; }
 /* Attribuzioni compatte: non devono coprire legenda e pulsanti */
 .leaflet-control-attribution { font-size: 10px; line-height: 1.3; max-width: 100%; }
 .leaflet-control-attribution .leaflet-attribution-flag { display: none !important; }
+
+/* Con una scheda aperta anche il selettore delle mappe si toglie di mezzo */
+.scheda-aperta .leaflet-control-layers { display: none; }
