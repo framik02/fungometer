@@ -307,15 +307,30 @@ function punteggioSpecie(cella, k, specie, giorno) {
 }
 
 /**
- * Punteggio delle specie scelte insieme: "almeno una".
- *   combinato = 100 x (1 - (1 - A/100) x (1 - B/100) x ...)
- * Si legge come se i punteggi fossero probabilità: la probabilità di trovarne
- * almeno una. Con una specie sola è esattamente il suo punteggio.
+ * Punteggio delle specie scelte insieme.
+ *
+ * Le specie non sono indipendenti: dipendono tutte dalla stessa acqua
+ * (pioggia e umidità del suolo). Se manca l'acqua manca per tutte, e sommare
+ * specie non deve far sembrare buona una zona secca. Quindi:
+ *   - la parte propria di ogni specie (habitat, stagione, temperatura, quota)
+ *     si combina come "almeno una": più specie = più occasioni;
+ *   - il risultato si moltiplica per l'acqua, che è comune a tutte.
+ *   combinato = 100 x acqua x (1 - (1 - resto A) x (1 - resto B) x ...)
+ *   resto = punteggio della specie / (100 x acqua)
+ * Come acqua comune si usa la migliore fra le specie scelte (le soglie di
+ * pioggia cambiano da specie a specie). Con una specie sola il risultato è
+ * esattamente il suo punteggio.
  */
 function punteggioQuadrato(cella, k, giorno = stato.giorno) {
+  const voci = stato.punteggi.celle[cella.id].s;
+  const acqua = Math.max(...stato.scelte.map((s) => voci[s].fa[giorno] / 100));
+  if (acqua <= 0) return 0;
   let nessuna = 1;
-  stato.scelte.forEach((s) => { nessuna *= 1 - punteggioSpecie(cella, k, s, giorno) / 100; });
-  return 100 * (1 - nessuna);
+  stato.scelte.forEach((s) => {
+    const resto = Math.min(1, punteggioSpecie(cella, k, s, giorno) / 100 / acqua);
+    nessuna *= 1 - resto;
+  });
+  return 100 * acqua * (1 - nessuna);
 }
 
 // ---------------------------------------------------------------------------
