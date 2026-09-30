@@ -19,7 +19,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-  <link rel="stylesheet" href="stile.css?v=9">
+  <link rel="stylesheet" href="stile.css?v=10">
 </head>
 <body>
   <header class="testata">
@@ -128,7 +128,8 @@
       <button type="button" id="svuota-selezione" class="svuota" hidden>Svuota</button>
     </div>
 
-    <div class="legenda" aria-label="Legenda">
+    <div class="legenda" aria-label="Legenda: tocca per cambiare i colori" role="button" tabindex="0"
+         title="Tocca per passare ai colori per daltonici (e ritorno)">
       <div class="legenda-barra"></div>
       <div class="legenda-etichette"><span>0 sfavorevole</span><span>100 ottimo</span></div>
     </div>
@@ -162,6 +163,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

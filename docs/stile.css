@@ -297,6 +297,12 @@ button, select { font: inherit; color: inherit; }
   /* Stessa scala di app.js: verde (0) > giallo > arancio > rosso (100) */
   background: linear-gradient(to right, hsl(120 70% 40%), hsl(60 85% 45%), hsl(30 90% 48%), hsl(0 80% 45%));
 }
+.legenda { cursor: pointer; }
+.scala-daltonici .legenda-barra {
+  background: linear-gradient(to right, rgb(68,1,84), rgb(59,82,139), rgb(33,145,140), rgb(94,201,98), rgb(253,231,37));
+}
+.leaflet-control-layers-toggle { width: 36px !important; height: 36px !important; }
+
 .legenda-etichette { display: flex; justify-content: space-between; margin-top: 3px; color: var(--testo-tenue); }
 
 .messaggio {
@@ -574,3 +580,7 @@ button, select { font: inherit; color: inherit; }
 @media (max-height: 720px) {
   .vicini-aperti .bottone-migliori, .vicini-aperti .bottone-canaloni { display: none; }
 }
+
+/* Attribuzioni compatte: non devono coprire legenda e pulsanti */
+.leaflet-control-attribution { font-size: 10px; line-height: 1.3; max-width: 100%; }
+.leaflet-control-attribution .leaflet-attribution-flag { display: none !important; }

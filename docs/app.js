@@ -94,18 +94,36 @@ const MESI = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ot
 // Piccole funzioni di aiuto
 // ---------------------------------------------------------------------------
 
+/**
+ * Due scale di colori:
+ * - "classica": verde (0) > giallo > arancio > rosso (100);
+ * - "daltonici": viridis, dal viola (0) al giallo (100), leggibile anche da
+ *   chi non distingue il rosso dal verde (circa un uomo su dodici).
+ * La scelta resta salvata nel telefono.
+ */
+let scalaDaltonici = ricordato("scala-colori") === "daltonici";
+
+// Viridis: cinque colori di riferimento, in mezzo si sfuma
+const VIRIDIS = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]];
+
 /** Tonalità del colore di un punteggio: 120 = verde (0) ... 0 = rosso (100). */
 function tonalita(punteggio) {
   return 120 - 1.2 * punteggio;
 }
 
-/** Colore di un punteggio come testo CSS: verde (0) > giallo > arancio > rosso (100). */
+/** Colore di un punteggio come testo CSS. */
 function colore(punteggio) {
+  if (scalaDaltonici) return `rgb(${coloreRgb(punteggio).join(",")})`;
   return `hsl(${tonalita(punteggio)} 78% ${punteggio > 40 ? 45 : 40}%)`;
 }
 
 /** Lo stesso colore come [r, g, b] da 0 a 255, per dipingere i pixel. */
 function coloreRgb(punteggio) {
+  if (scalaDaltonici) {
+    const t = Math.max(0, Math.min(1, punteggio / 100)) * (VIRIDIS.length - 1);
+    const i = Math.min(VIRIDIS.length - 2, Math.floor(t)), f = t - i;
+    return VIRIDIS[i].map((c, j) => Math.round(c + (VIRIDIS[i + 1][j] - c) * f));
+  }
   const h = tonalita(punteggio) / 360, s = 0.78, l = punteggio > 40 ? 0.45 : 0.40;
   const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
   const canale = (t) => {
@@ -372,6 +390,7 @@ async function avvia() {
   preparaAree();
   preparaSelezione();
   creaImmagini();
+  preparaLegenda();
   preparaVicini();
   preparaMiglioriQui();
   preparaRicerca();
@@ -594,12 +613,32 @@ function segnaGiorniMigliori() {
 function preparaMappa() {
   mappa = L.map("mappa", { zoomControl: true }).setView([42.4, 12.6], 8);
 
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 17,
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' +
-      ' | Meteo <a href="https://open-meteo.com/">Open-Meteo</a>',
-  }).addTo(mappa);
+  // Mappe di base: stradale (OpenStreetMap) o topografica con curve di livello
+  // (OpenTopoMap); in più, a scelta, i sentieri escursionistici (Waymarked Trails).
+  // Attribuzioni brevi (su due righe al massimo sul telefono), con tutte le fonti e le licenze
+  const meteo = ' | <a href="https://open-meteo.com/">Open-Meteo</a>';
+  const basi = {
+    "Stradale": L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 17,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' + meteo,
+    }),
+    "Topografica": L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+      maxZoom: 17, subdomains: "abc",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM' +
+        ' | &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)' + meteo,
+    }),
+  };
+  const sentieri = L.tileLayer("https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png", {
+    maxZoom: 17, opacity: 0.8,
+    attribution: '&copy; <a href="https://hiking.waymarkedtrails.org">Waymarked Trails</a> (CC-BY-SA)',
+  });
+  const baseScelta = basi[ricordato("mappa-base")] ? ricordato("mappa-base") : "Stradale";
+  basi[baseScelta].addTo(mappa);
+  if (ricordato("sentieri") === "si") sentieri.addTo(mappa);
+  L.control.layers(basi, { "Sentieri": sentieri }, { position: "topleft" }).addTo(mappa);
+  mappa.on("baselayerchange", (ev) => ricorda("mappa-base", ev.name));
+  mappa.on("overlayadd", (ev) => { if (ev.layer === sentieri) ricorda("sentieri", "si"); });
+  mappa.on("overlayremove", (ev) => { if (ev.layer === sentieri) ricorda("sentieri", "no"); });
 
   stato.stratoSelezione = L.layerGroup().addTo(mappa);
 
@@ -728,7 +767,24 @@ function dipingiTutte() {
 }
 
 /** Colori già pronti per i punteggi interi da 0 a 100: [r, g, b, alfa]. */
-const TAVOLOZZA = Array.from({ length: 101 }, (_, v) => [...coloreRgb(v), Math.round(255 * opacita(v))]);
+let TAVOLOZZA = [];
+function preparaTavolozza() {
+  TAVOLOZZA = Array.from({ length: 101 }, (_, v) => [...coloreRgb(v), Math.round(255 * opacita(v))]);
+  document.querySelector(".contenitore-mappa").classList.toggle("scala-daltonici", scalaDaltonici);
+}
+
+/** Toccando la legenda si passa da una scala di colori all'altra. */
+function preparaLegenda() {
+  preparaTavolozza();
+  document.querySelector(".legenda").addEventListener("click", () => {
+    scalaDaltonici = !scalaDaltonici;
+    ricorda("scala-colori", scalaDaltonici ? "daltonici" : "classica");
+    preparaTavolozza();
+    ricolora();
+    messaggio(scalaDaltonici ? "Colori per daltonici: dal viola (sfavorevole) al giallo (ottimo)."
+                             : "Colori classici: dal verde (sfavorevole) al rosso (ottimo).");
+  });
+}
 
 /** Ogni valore diventa il migliore fra sé e gli 8 vicini (celle vuote escluse). */
 function massimiDeiVicini(valori, W, H) {
