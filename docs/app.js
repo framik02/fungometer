@@ -702,13 +702,17 @@ function preparaMappa() {
     document.getElementById("messaggio").hidden = true;   // il messaggio non deve coprire la scheda
   });
   mappa.on("popupclose", () => {
+    stato.schedaChiusaAlle = Date.now();
     contenitore.classList.remove("scheda-aperta");
     if (stato.evidenziato) { stato.evidenziato.remove(); stato.evidenziato = null; }
   });
 
-  // Tocco sulla mappa: apre la scheda del quadrato (solo in modalità Mappa)
+  // Tocco sulla mappa: apre la scheda del quadrato (solo in modalità Mappa).
+  // Se c'era una scheda aperta, il tocco fuori la chiude soltanto: Leaflet la
+  // chiude appena prima del click, quindi guardiamo se si è chiusa in quel momento.
   mappa.on("click", (ev) => {
     if (!stato.punteggi || stato.selezionando) return;
+    if (Date.now() - (stato.schedaChiusaAlle || 0) < 400) return;
     const q = quadratoInPunto(ev.latlng);
     if (q) apriSchedaQuadrato(q);
   });
