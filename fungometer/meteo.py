@@ -35,6 +35,15 @@ VARIABILI = {
     "soil_moisture_7_to_28cm_mean": "suolo",
 }
 
+# Modello meteo: ECMWF IFS a 9 km, lo stesso per tutta Italia e per tutti i
+# giorni (passati e previsti). Il modello automatico di Open-Meteo ("best_match")
+# cuce più modelli ICON con domini diversi: il 3 ottobre 2026 dava 1 mm di
+# pioggia in 26 giorni a nord di Greve in Chianti, dove ECMWF, ICON-EU, ICON-2I
+# e la rianalisi ERA5 davano fra 51 e 104 mm, e sulla mappa compariva una riga
+# dritta. L'umidità del suolo del best_match veniva già da ECMWF: le soglie
+# di specie.yaml restano valide.
+MODELLO = "ecmwf_ifs"
+
 CELLE_PER_LOTTO = 50
 PAUSA_FRA_LOTTI = 15  # secondi: 50 celle x 2,4 = 120 chiamate ogni 15 s, cioè 480 al minuto (limite 600)
 
@@ -128,6 +137,7 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
             # per questa quota invece che per quella del punto centrale.
             "elevation": ",".join(str(c["quota"]["media"]) for c in lotto),
             "daily": ",".join(VARIABILI),
+            "models": MODELLO,
             "timezone": "Europe/Rome",
         }
         if storico:

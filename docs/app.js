@@ -1008,7 +1008,7 @@ function limitiDi(celle) {
 
 const ZOOM_DETTAGLIO = 10;       // da qui in su si vedono i quadrati da 500 m
 const ITALIA = [[35.5, 6.5], [47.1, 18.6]];
-const LARGHEZZA_PANORAMICA = 900; // pixel dell'immagine d'insieme
+const LARGHEZZA_PANORAMICA = 700; // pixel dell'immagine d'insieme (il browser la sfuma ancora ingrandendola)
 
 /** Python arrotonda le metà al pari (round(2.5) = 2): lo facciamo anche qui. */
 function arrotondaPari(x) {
@@ -1215,7 +1215,19 @@ function mostraImmaginiNuove(zona, area) {
 
 // --- Quadro d'insieme (mappa vista da lontano) ---
 
-/** Prepara l'immagine d'insieme: un rettangolo per gruppo, in proiezione di Mercatore. */
+/*
+ * L'immagine d'insieme è una superficie continua, non una griglia di blocchi:
+ * ogni pixel prende la media dei gruppi vicini pesata con una campana
+ * (gaussiana) che cala con la distanza. Così i colori passano da una zona
+ * all'altra senza scalini, e dove i gruppi finiscono (mare, città, pianure
+ * coltivate) il colore sfuma nella trasparenza invece di tagliarsi di netto.
+ * Vicini e pesi di ogni pixel si calcolano una volta sola: a ogni cambio di
+ * specie o di giorno resta solo una somma pesata.
+ */
+const SIGMA_PANORAMICA_KM = 9;     // larghezza della campana
+const RAGGIO_PANORAMICA_KM = 22;   // oltre questa distanza un gruppo non conta
+const COPERTURA_PIENA = 0.9;       // somma dei pesi da cui il colore è pieno
+
 function preparaPanoramica() {
   const pan = stato.italia.panoramica;
   if (!pan) return;
@@ -1223,16 +1235,50 @@ function preparaPanoramica() {
   const W = LARGHEZZA_PANORAMICA;
   const scala = W / ((est - ovest) * Math.PI / 180);
   const H = Math.round((mercatore(nord) - mercatore(sud)) * scala);
-  const x = (lon) => (lon - ovest) * Math.PI / 180 * scala;
-  const y = (lat) => (mercatore(nord) - mercatore(lat)) * scala;
-  pan.rettangoli = pan.gruppi.map(([s, o, n, e]) => {
-    const x0 = Math.floor(x(o)), y0 = Math.floor(y(n));
-    return [x0, y0, Math.max(1, Math.ceil(x(e)) - x0), Math.max(1, Math.ceil(y(s)) - y0)];
+
+  // Centri dei gruppi in una griglia di caselle da 0,2 gradi, per trovare presto i vicini
+  const centri = pan.gruppi.map(([s, o, n, e]) => [(s + n) / 2, (o + e) / 2]);
+  const caselle = new Map();
+  const casella = (lat, lon) => Math.floor(lat / 0.2) * 1000 + Math.floor(lon / 0.2);
+  centri.forEach(([lat, lon], i) => {
+    const c = casella(lat, lon);
+    if (!caselle.has(c)) caselle.set(c, []);
+    caselle.get(c).push(i);
   });
+
+  // Per ogni pixel: i gruppi entro il raggio e il loro peso (in forma compatta)
+  const inizio = new Uint32Array(W * H + 1);
+  const indici = [], pesi = [];
+  const dueSigma2 = SIGMA_PANORAMICA_KM ** 2;
+  for (let y = 0; y < H; y++) {
+    const m = mercatore(nord) - (y + 0.5) / scala;
+    const lat = (2 * Math.atan(Math.exp(m)) - Math.PI / 2) * 180 / Math.PI;
+    const kmLon = 111.32 * Math.cos(lat * Math.PI / 180);
+    for (let x = 0; x < W; x++) {
+      const lon = ovest + (x + 0.5) / scala * 180 / Math.PI;
+      const r0 = Math.floor(lat / 0.2), c0 = Math.floor(lon / 0.2);
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const elenco = caselle.get((r0 + dr) * 1000 + c0 + dc);
+          if (!elenco) continue;
+          for (const i of elenco) {
+            const dy = (centri[i][0] - lat) * 111.32, dx = (centri[i][1] - lon) * kmLon;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > RAGGIO_PANORAMICA_KM ** 2) continue;
+            indici.push(i);
+            pesi.push(Math.exp(-d2 / dueSigma2));
+          }
+        }
+      }
+      inizio[y * W + x + 1] = indici.length;
+    }
+  }
+  pan.inizio = inizio;
+  pan.indici = Uint16Array.from(indici);
+  pan.pesi = Float32Array.from(pesi);
+  pan.W = W; pan.H = H;
   pan.tela = document.createElement("canvas");
   pan.tela.width = W; pan.tela.height = H;
-  pan.sfumata = document.createElement("canvas");
-  pan.sfumata.width = W; pan.sfumata.height = H;
   pan.immagine = L.imageOverlay(pan.tela.toDataURL(), ITALIA, { className: "quadrati-morbidi", interactive: false });
 }
 
@@ -1251,19 +1297,23 @@ function punteggioGruppo(i, giorno = stato.giorno) {
 function dipingiPanoramica() {
   const pan = stato.italia.panoramica;
   if (!pan) return;
+  const valori = new Float32Array(pan.gruppi.length);
+  for (let i = 0; i < valori.length; i++) valori[i] = punteggioGruppo(i);
   const ctx = pan.tela.getContext("2d");
-  ctx.clearRect(0, 0, pan.tela.width, pan.tela.height);
-  pan.rettangoli.forEach(([x, y, w, h], i) => {
-    const [r, g, b, a] = TAVOLOZZA[Math.round(punteggioGruppo(i))];
-    ctx.fillStyle = `rgba(${r},${g},${b},${a / 255})`;
-    ctx.fillRect(x, y, w, h);
-  });
-  const sfuma = pan.sfumata.getContext("2d");
-  sfuma.clearRect(0, 0, pan.sfumata.width, pan.sfumata.height);
-  if ("filter" in sfuma) sfuma.filter = "blur(2px)";
-  sfuma.drawImage(pan.tela, 0, 0);
-  sfuma.filter = "none";
-  pan.sfumata.toBlob((blob) => {
+  const img = ctx.createImageData(pan.W, pan.H);
+  const { inizio, indici, pesi } = pan;
+  for (let p = 0; p < pan.W * pan.H; p++) {
+    const a = inizio[p], b = inizio[p + 1];
+    if (a === b) continue;
+    let somma = 0, peso = 0;
+    for (let j = a; j < b; j++) { somma += pesi[j] * valori[indici[j]]; peso += pesi[j]; }
+    const colore4 = TAVOLOZZA[Math.round(somma / peso)];
+    const o = p * 4;
+    img.data[o] = colore4[0]; img.data[o + 1] = colore4[1]; img.data[o + 2] = colore4[2];
+    img.data[o + 3] = Math.round(colore4[3] * Math.min(1, peso / COPERTURA_PIENA));
+  }
+  ctx.putImageData(img, 0, 0);
+  pan.tela.toBlob((blob) => {
     if (!blob) return;
     if (pan.url) URL.revokeObjectURL(pan.url);
     pan.url = URL.createObjectURL(blob);
