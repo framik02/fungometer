@@ -18,6 +18,7 @@ l'altro si aspetta qualche secondo.
 """
 
 import time
+from datetime import date
 
 import requests
 
@@ -36,6 +37,32 @@ VARIABILI = {
 
 CELLE_PER_LOTTO = 50
 PAUSA_FRA_LOTTI = 15  # secondi: 50 celle x 2,4 = 120 chiamate ogni 15 s, cioè 480 al minuto (limite 600)
+
+# Limite orario: 5.000 chiamate. Ne teniamo un po' di margine e contiamo le
+# chiamate fatte nell'ultima ora da tutte le richieste dello script (Foligno,
+# Roma e i gruppi d'Italia): se il prossimo lotto supererebbe il tetto, si
+# aspetta che le chiamate più vecchie escano dalla finestra di un'ora.
+TETTO_ORARIO = 4700
+_registro = []   # (istante, chiamate) dei lotti dell'ultima ora
+
+
+def _costo(n_localita, giorni, n_variabili):
+    """Quante chiamate conta Open-Meteo per un lotto."""
+    return n_localita * max(1.0, giorni / 14) * max(1.0, n_variabili / 10)
+
+
+def _aspetta_il_tetto(chiamate):
+    """Aspetta finché il lotto entra nel tetto orario."""
+    while True:
+        adesso = time.monotonic()
+        _registro[:] = [(t, c) for t, c in _registro if adesso - t < 3600]
+        usate = sum(c for _, c in _registro)
+        if usate + chiamate <= TETTO_ORARIO:
+            _registro.append((adesso, chiamate))
+            return
+        attesa = 3600 - (adesso - _registro[0][0]) + 1
+        print(f"  tetto orario di Open-Meteo: {usate:.0f} chiamate nell'ultima ora, aspetto {attesa:.0f} s")
+        time.sleep(attesa)
 
 # Di solito Open-Meteo risponde in circa un secondo. Ogni tanto una richiesta
 # resta appesa senza risposta: meglio abbandonarla presto e riprovare.
@@ -108,6 +135,11 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
         else:
             parametri.update(past_days=past_days, forecast_days=forecast_days)
 
+        if storico:
+            giorni = (date.fromisoformat(end_date) - date.fromisoformat(start_date)).days + 1
+        else:
+            giorni = past_days + forecast_days
+        _aspetta_il_tetto(_costo(len(lotto), giorni, len(VARIABILI)))
         partenza = time.monotonic()
         risultati = _chiedi(url, parametri)
         durata = time.monotonic() - partenza

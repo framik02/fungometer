@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>FungoMeter</title>
-  <meta name="description" content="Punteggio giornaliero delle condizioni per i funghi nei dintorni di Foligno e Roma.">
+  <meta name="description" content="Punteggio giornaliero delle condizioni per i funghi in tutta Italia.">
   <meta name="theme-color" content="#2f4a2a">
   <meta name="color-scheme" content="light">
 
@@ -19,7 +19,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-  <link rel="stylesheet" href="stile.css?v=21">
+  <link rel="stylesheet" href="stile.css?v=22">
 </head>
 <body>
   <header class="testata">
@@ -75,6 +75,7 @@
         <div class="aree" role="group" aria-label="Vai all'area">
           <button type="button" data-area="foligno">Foligno</button>
           <button type="button" data-area="roma">Roma</button>
+          <button type="button" data-area="italia">Italia</button>
         </div>
         <button type="button" id="chiudi-filtri" class="bottone-primario chiudi-filtri">Fatto</button>
       </div>
@@ -164,7 +165,7 @@
       <li><strong>L'app non identifica i funghi.</strong> Fai controllare ogni raccolta all'Ispettorato micologico della tua ASL: il controllo è gratuito.</li>
       <li><strong>Ovolo buono, mazza di tamburo, chiodino, prugnolo e spugnola hanno sosia velenosi o mortali</strong> (per esempio l'Amanita muscaria da giovane, le piccole Lepiota, la Galerina marginata, l'Entoloma sinuatum, la Gyromitra). Nel dubbio non raccogliere e non mangiare.</li>
       <li><strong>Chiodini e spugnole crudi sono tossici:</strong> vanno sempre cotti a lungo.</li>
-      <li><strong>Rispetta le norme regionali</strong> di Umbria e Lazio: tesserino, quantità, giorni e orari di raccolta, aree protette. Informati presso il Comune o la Regione.</li>
+      <li><strong>Rispetta le norme regionali</strong> della tua regione: tesserino, quantità, giorni e orari di raccolta, aree protette. Informati presso il Comune o la Regione.</li>
       <li><strong>Emergenze: chiama il 112.</strong> Per un sospetto avvelenamento puoi chiamare anche un Centro antiveleni, attivo giorno e notte:
         <ul>
           <li>Roma, Policlinico Gemelli: <a href="tel:+39063054343">06 3054343</a></li>
@@ -178,6 +179,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=21"></script>
+  <script src="app.js?v=22"></script>
 </body>
 </html>

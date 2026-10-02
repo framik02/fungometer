@@ -44,6 +44,7 @@ const stato = {
   vicini: [],           // i 3 posti migliori vicino a te
   vicinoMostrato: 0,    // quale dei 3 si vede nella scheda in basso
   stratoVicini: null,   // segnaposti 1, 2, 3 sulla mappa
+  italia: { indice: null, panoramica: null, riquadri: {}, protette: {} },   // tutta Italia (vedi più sotto)
 };
 
 const N = 6;                 // quadrati da 500 m per lato di una cella da 3 km
@@ -239,7 +240,12 @@ function dataBreve(iso) {
  * R = r x 6 + k / 6 e colonna C = c x 6 + k % 6 della griglia da 500 m.
  */
 function preparaGriglia() {
-  stato.celle.forEach((cella) => {
+  aggiungiCelle(stato.celle);
+}
+
+/** Aggiunge celle alla griglia (all'avvio quelle di Foligno e Roma, poi i riquadri d'Italia). */
+function aggiungiCelle(celle) {
+  celle.forEach((cella) => {
     const [, riga, colonna] = cella.id.match(/_(\d+)_(\d+)$/).map(Number);
     cella.area = cella.id.split("_")[0];   // "foligno_004_012" -> "foligno"
     cella.riga = riga;
@@ -385,6 +391,7 @@ async function avvia() {
       parti.forEach((parte) => Object.assign(punteggi.celle, parte.celle));
     }
     DATI_PER_QUADRATO = punteggi.specie.length + 1;
+    await caricaItalia();
   } catch (errore) {
     document.getElementById("aggiornamento").textContent =
       "Non riesco a caricare i dati. Controlla la connessione e ricarica la pagina.";
@@ -393,6 +400,7 @@ async function avvia() {
   }
 
   preparaGriglia();
+  preparaPanoramica();
   mostraAggiornamento();
   preparaFiltro();
   preparaGiorni();
@@ -409,9 +417,14 @@ async function avvia() {
 
   // Prima inquadratura: l'ultima area scelta, altrimenti tutte e due
   const area = ricordato("area");
-  if (area && stato.aree[area]) vaiAllArea(area); else mappa.fitBounds(limitiDi(stato.celle));
+  if (area === "italia" && stato.italia.panoramica) mappa.fitBounds(ITALIA);
+  else if (area && stato.aree[area]) vaiAllArea(area); else mappa.fitBounds(limitiDi(stato.celle));
   aggiornaStileZoom();
   ricolora();
+  caricaRiquadriVisibili();
+  // Preferiti e zona selezionata possono stare in riquadri d'Italia da scaricare
+  caricaRiquadriDi([...preferiti.map((f) => f.area), ...[...stato.selezione].map((q) => q.split(":")[0])])
+    .then(() => { disegnaPreferiti(); disegnaSelezione(); segnaGiorniMigliori(); });
 
   document.getElementById("mia-posizione").addEventListener("click", trovaPosizione);
 }
@@ -604,8 +617,18 @@ function giorniMigliori(valori) {
 
 /** Scrive l'indice sotto ogni giorno e mette la stella sui migliori. */
 function segnaGiorniMigliori() {
-  const quadrati = quadratiDellIndice();
-  const indici = indiciDeiGiorni(quadrati);
+  let quadrati = quadratiDellIndice();
+  let indici;
+  if (!stato.selezione.size && vistaDaLontano()) {
+    // Da lontano: i gruppi da 15 km sullo schermo
+    quadrati = gruppiSulloSchermo();
+    indici = stato.punteggi.giorni.map((_, g) => {
+      const valori = quadrati.map((x) => punteggioGruppo(x.i, g)).sort((a, b) => b - a).slice(0, QUADRATI_INDICE);
+      return valori.length ? valori.reduce((a, b) => a + b, 0) / valori.length : 0;
+    });
+  } else {
+    indici = indiciDeiGiorni(quadrati);
+  }
   const migliori = giorniMigliori(indici);
   const massimo = Math.max(...indici);
   const dove = stato.selezione.size
@@ -664,16 +687,14 @@ function preparaMappa() {
   if (ricordato("sentieri") === "si") sentieri.addTo(mappa);
   // Aree protette: i confini si scaricano solo quando accendi lo strato
   const protette = L.layerGroup();
+  stato.stratoProtette = protette;
   protette.on("add", async () => {
-    if (protette.getLayers().length) return;
-    const dati = await caricaAreeProtette();
-    if (!dati) return;
-    L.geoJSON(dati, {
-      interactive: false,
-      style: (f) => f.properties.tipo === "parco"
-        ? { color: "#6a1b9a", weight: 2, dashArray: "6 4", fillColor: "#6a1b9a", fillOpacity: 0.06 }
-        : { color: "#00796b", weight: 1.5, dashArray: "2 4", fill: false },
-    }).addTo(protette);
+    if (!protette.messe) {
+      protette.messe = new Set(["base"]);
+      const dati = await caricaAreeProtette();
+      if (dati) disegnaAreeProtette(dati);
+    }
+    aggiornaAreeProtette();
   });
   if (ricordato("protette") === "si") protette.addTo(mappa);
   // Il menu delle mappe si apre dal pulsante "Mappe" (il suo tasto di Leaflet è nascosto)
@@ -714,6 +735,10 @@ function preparaMappa() {
   mappa.on("click", (ev) => {
     if (!stato.punteggi || stato.selezionando) return;
     if (Date.now() - (stato.schedaChiusaAlle || 0) < 400) return;
+    if (vistaDaLontano()) {   // da lontano un tocco porta vicino, dove si vedono i quadrati
+      mappa.setView(ev.latlng, ZOOM_DETTAGLIO + 1);
+      return;
+    }
     const q = quadratoInPunto(ev.latlng);
     if (q) apriSchedaQuadrato(q);
   });
@@ -725,6 +750,10 @@ function preparaMappa() {
   // Quando la mappa si ferma, l'indice dei giorni segue lo schermo
   mappa.on("moveend", () => {
     if (!stato.punteggi) return;
+    dipingiArretrate();
+    caricaRiquadriVisibili();
+    aggiornaCanaloni();
+    aggiornaAreeProtette();
     aggiornaAreaDaMappa();
     if (!stato.selezione.size) segnaGiorniMigliori();
     if (!document.getElementById("pannello-migliori").hidden) mostraMiglioriQui();
@@ -740,26 +769,37 @@ function preparaMappa() {
  *   Sotto lo zoom 12 ogni quadrato prende il valore migliore dei vicini, così
  *   un posto ottimo non sparisce nella sfumatura.
  */
-let eraVicino = null, eraMassimi = null;
+let eraModo = null, eraMassimi = null;
 function aggiornaStileZoom() {
-  const vicino = mappa.getZoom() >= ZOOM_NETTO;
-  const massimi = mappa.getZoom() < ZOOM_MASSIMI;
-  if (vicino !== eraVicino) {
-    document.querySelector(".contenitore-mappa").classList.toggle("quadrati-netti", vicino);
-    Object.values(stato.zone).forEach((z) => (vicino ? z.immagine.addTo(mappa) : z.immagine.remove()));
-    Object.values(stato.aree).forEach((a) => (vicino ? a.immagine.remove() : a.immagine.addTo(mappa)));
-    eraVicino = vicino;
+  const zoom = mappa.getZoom();
+  // Da lontano il quadro di tutta Italia, poi i quadrati sfumati, da vicino netti
+  const modo = vistaDaLontano() ? "insieme" : zoom >= ZOOM_NETTO ? "netto" : "morbido";
+  const massimi = zoom < ZOOM_MASSIMI;
+  if (modo !== eraModo) {
+    document.querySelector(".contenitore-mappa").classList.toggle("quadrati-netti", modo === "netto");
+    Object.values(stato.zone).forEach((z) => (modo === "netto" ? z.immagine.addTo(mappa) : z.immagine.remove()));
+    Object.values(stato.aree).forEach((a) => (modo === "morbido" ? a.immagine.addTo(mappa) : a.immagine.remove()));
+    if (stato.italia.panoramica) {
+      if (modo === "insieme") stato.italia.panoramica.immagine.addTo(mappa);
+      else stato.italia.panoramica.immagine.remove();
+    }
+    eraModo = modo;
     eraMassimi = massimi;
     dipingiTutte();
   } else if (massimi !== eraMassimi) {
     eraMassimi = massimi;
-    if (!vicino) dipingiTutte();
+    if (modo === "morbido") dipingiTutte();
   }
 }
 
 /** Crea le immagini (vuote): una per zona (netta) e una per area (morbida). */
 function creaImmagini() {
-  Object.values(stato.zone).forEach((zona) => {
+  Object.values(stato.zone).forEach(creaImmagineZona);
+  Object.values(stato.aree).forEach(preparaImmagineMorbida);
+}
+
+function creaImmagineZona(zona) {
+  {
     const g = stato.aree[zona.area];
     zona.larghezza = (zona.cMax - zona.cMin + 1) * N;
     zona.altezza = (zona.rMax - zona.rMin + 1) * N;
@@ -770,9 +810,9 @@ function creaImmagini() {
       [g.sud + zona.rMin * N * g.passoLat, g.ovest + zona.cMin * N * g.passoLon],
       [g.sud + (zona.rMax + 1) * N * g.passoLat, g.ovest + (zona.cMax + 1) * N * g.passoLon],
     ];
+    zona.limiti = L.latLngBounds(limiti);
     zona.immagine = L.imageOverlay(zona.tela.toDataURL(), limiti, { className: "quadrati", interactive: false });
-  });
-  Object.values(stato.aree).forEach(preparaImmagineMorbida);
+  }
 }
 
 /** Da latitudine a coordinata verticale della proiezione della mappa (Mercatore). */
@@ -807,6 +847,7 @@ function preparaImmagineMorbida(a) {
   a.tela.width = a.pxW; a.tela.height = a.pxH;
   a.sfumata = document.createElement("canvas");
   a.sfumata.width = a.pxW; a.sfumata.height = a.pxH;
+  a.limiti = L.latLngBounds([[latSud, lonOvest], [latNord, lonEst]]);
   a.immagine = L.imageOverlay(a.tela.toDataURL(), [[latSud, lonOvest], [latNord, lonEst]],
     { className: "quadrati-morbidi", interactive: false });
 }
@@ -821,10 +862,31 @@ function ricolora() {
   if (!document.getElementById("pannello-preferiti").hidden) mostraPreferiti();
 }
 
-/** Ridipinge solo le immagini che si stanno vedendo. */
+/**
+ * Ridipinge solo le immagini che si stanno vedendo; le altre restano "da
+ * rifare" e si ridipingono quando entrano nello schermo (dipingiArretrate).
+ */
 function dipingiTutte() {
-  if (mappa.getZoom() >= ZOOM_NETTO) Object.values(stato.zone).forEach(dipingiZona);
-  else Object.values(stato.aree).forEach(dipingiArea);
+  if (eraModo === "insieme") { dipingiPanoramica(); return; }
+  const vista = mappa.getBounds().pad(0.3);
+  const elenco = eraModo === "netto" ? Object.values(stato.zone) : Object.values(stato.aree);
+  const dipingi = eraModo === "netto" ? dipingiZona : dipingiArea;
+  Object.values(stato.zone).forEach((z) => { z.daRifare = true; });
+  Object.values(stato.aree).forEach((a) => { a.daRifare = true; });
+  elenco.forEach((x) => {
+    if (!x.limiti || vista.intersects(x.limiti)) { dipingi(x); x.daRifare = false; }
+  });
+}
+
+/** Dopo uno spostamento, dipinge le immagini rimaste indietro che ora si vedono. */
+function dipingiArretrate() {
+  if (eraModo === "insieme") return;
+  const vista = mappa.getBounds().pad(0.3);
+  const elenco = eraModo === "netto" ? Object.values(stato.zone) : Object.values(stato.aree);
+  const dipingi = eraModo === "netto" ? dipingiZona : dipingiArea;
+  elenco.forEach((x) => {
+    if (x.daRifare && x.limiti && vista.intersects(x.limiti)) { dipingi(x); x.daRifare = false; }
+  });
 }
 
 /** Colori già pronti per i punteggi interi da 0 a 100: [r, g, b, alfa]. */
@@ -882,6 +944,7 @@ function dipingiZona(zona) {
   });
   ctx.putImageData(img, 0, 0);
   zona.immagine.setUrl(zona.tela.toDataURL());
+  zona.daRifare = false;
 }
 
 /** Dipinge l'immagine morbida di un'area e la sfuma. */
@@ -928,6 +991,301 @@ function limitiDi(celle) {
 }
 
 // ---------------------------------------------------------------------------
+// Tutta Italia: riquadri scaricati quando servono e quadro d'insieme
+// ---------------------------------------------------------------------------
+
+/*
+ * L'Italia è divisa in riquadri di mezzo grado (data/italia/indice.json).
+ * Ogni riquadro ha le sue celle da 3 km e i suoi quadrati da 500 m
+ * (data/italia/<riquadro>.json) e il meteo dei suoi gruppi da 15 km
+ * (data/italia/meteo/<riquadro>.json). Si scaricano solo quando la mappa li
+ * mostra da vicino. Da lontano si vede data/italia/panoramica.json: per ogni
+ * gruppo, il quadrato migliore di ogni specie.
+ *
+ * Il meteo di un gruppo vale per tutte le sue celle, ma la temperatura si
+ * corregge con la quota della cella: le stesse formule di fungometer/italia.py.
+ */
+
+const ZOOM_DETTAGLIO = 10;       // da qui in su si vedono i quadrati da 500 m
+const ITALIA = [[35.5, 6.5], [47.1, 18.6]];
+const LARGHEZZA_PANORAMICA = 900; // pixel dell'immagine d'insieme
+
+/** Python arrotonda le metà al pari (round(2.5) = 2): lo facciamo anche qui. */
+function arrotondaPari(x) {
+  const r = Math.round(x);
+  return Math.abs(x % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
+}
+
+function modulo(a, n) {
+  return ((a % n) + n) % n;
+}
+
+/** Giorni dall'epoca per una data (anno, mese 1-12, giorno), senza fusi orari. */
+function giornoNumero(anno, mese, giorno) {
+  anno += Math.floor((mese - 1) / 12);
+  mese = modulo(mese - 1, 12) + 1;
+  return Date.UTC(anno, mese - 1, giorno) / 86400000;
+}
+
+function rampa(valore, basso, alto, larghezza) {
+  if (valore >= basso && valore <= alto) return 1;
+  const distanza = valore < basso ? basso - valore : valore - alto;
+  return Math.max(0, 1 - distanza / larghezza);
+}
+
+function campana(valore, ottimo, basso, alto) {
+  const sigma = (alto - basso) / 2;
+  return Math.exp(-0.5 * ((valore - ottimo) / sigma) ** 2);
+}
+
+/** Come fattore_stagione in fungometer/punteggio.py. `n` è il giorno come numero. */
+function fattoreStagione(n, centrali, margine, quota = null, regole = null) {
+  if (!centrali.length) return 0;
+  const anno = new Date(n * 86400000).getUTCFullYear();
+  const primo = Math.min(...centrali), ultimo = Math.max(...centrali);
+  if (quota !== null && regole) {
+    const spostamento = (quota - regole.quota_riferimento) / 100 * regole.giorni_per_100m;
+    const estiva = primo <= regole.ultimo_mese_estivo;
+    const primaverile = ultimo <= (regole.ultimo_mese_primaverile || 0);
+    const a = giornoNumero(anno, primo, 1), b = giornoNumero(anno, ultimo + 1, 1);
+    const meta = a + Math.floor((b - a) / 2);
+    const ritardo = n < meta ? (estiva ? spostamento : -spostamento) : (primaverile ? spostamento : -spostamento);
+    return fattoreStagione(n - arrotondaPari(ritardo), centrali, margine);
+  }
+  const inizio = giornoNumero(anno, primo, 1);
+  const fine = giornoNumero(anno, ultimo + 1, 1);
+  if (n >= inizio && n < fine) return 1;
+  let prima = 0;
+  while (margine.includes(modulo(primo - prima - 2, 12) + 1) && prima < 12) prima++;
+  let dopo = 0;
+  while (margine.includes(modulo(ultimo + dopo, 12) + 1) && dopo < 12) dopo++;
+  if (n < inizio) {
+    if (!prima) return 0;
+    const partenza = giornoNumero(anno, primo - prima, 1);
+    return Math.max(0, Math.min(1, (n - partenza) / (inizio - partenza)));
+  }
+  if (!dopo) return 0;
+  const arrivo = giornoNumero(anno, ultimo + 1 + dopo, 1);
+  return Math.max(0, Math.min(1, (arrivo - n) / (arrivo - fine)));
+}
+
+/**
+ * Meteo e fattori di una cella d'Italia per tutti i giorni e tutte le specie,
+ * nello stesso formato delle celle di Foligno e Roma (punteggi.celle).
+ */
+function vociCellaItalia(cella, gruppo) {
+  const r = stato.punteggi.regole;
+  const scarto = -r.gradiente_termico * (cella.quota.media - gruppo.q);
+  const giorni = stato.punteggi.giorni.map((iso) => {
+    const [a, m, g] = iso.split("-").map(Number);
+    return giornoNumero(a, m, g);
+  });
+  const piu = (lista) => lista.map((v) => (v === null ? null : v + scarto));
+  const notti = giorni.map((_, d) => gruppo.gm.slice(d, d + 7)
+    .filter((t) => t !== null && t + scarto <= r.gelo.soglia_tmin).length);
+  const gelo = notti.map((n) => Math.max(0, 1 - r.gelo.penalita_per_notte * Math.max(0, n - r.gelo.notti_tollerate)));
+  const acqua = r.acqua;
+  return {
+    p: gruppo.p, u: gruppo.u, k: gruppo.k,
+    tn: piu(gruppo.tn), tx: piu(gruppo.tx), tr: piu(gruppo.tr), g: notti,
+    s: stato.punteggi.specie.map((sp) => {
+      const [basso, alto] = sp.temperatura;
+      const ottimo = sp.temperatura_ottimale ?? (basso + alto) / 2;
+      const fa = [], ft = [], fs = [];
+      giorni.forEach((n, d) => {
+        const fp = Math.min(1, gruppo.p[d] / sp.pioggia_mm);
+        let f = gruppo.u[d] === null ? fp
+          : acqua.peso_pioggia * fp + acqua.peso_suolo * rampa(gruppo.u[d], acqua.suolo_umido, 99, acqua.suolo_umido - acqua.suolo_secco);
+        f *= Math.max(acqua.minimo_caldo, 1 - acqua.penalita_caldo * gruppo.k[d]);
+        fa.push(100 * f);
+        let t = gruppo.tr[d] === null ? 0 : campana(gruppo.tr[d] + scarto, ottimo, basso, alto);
+        if (gruppo.c[d]) t = Math.min(1, t * (1 + r.bonus_calo));
+        ft.push(100 * t);
+        fs.push(100 * fattoreStagione(n, sp.mesi_centrali, sp.mesi_margine, cella.quota.media, r.stagione) * gelo[d]);
+      });
+      return { fa, ft, fs };
+    }),
+  };
+}
+
+/** Da base64 a byte. */
+function daBase64(testo) {
+  const binario = atob(testo);
+  const byte = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) byte[i] = binario.charCodeAt(i);
+  return byte;
+}
+
+/** Scarica l'elenco dei riquadri e il quadro d'insieme (se ci sono). */
+async function caricaItalia() {
+  try {
+    const [indice, panoramica] = await Promise.all([
+      caricaJson("data/italia/indice.json"), caricaJson("data/italia/panoramica.json"),
+    ]);
+    stato.italia.indice = indice;
+    const S = stato.punteggi.specie.length, D = stato.punteggi.giorni.length;
+    panoramica.p = daBase64(panoramica.p);
+    panoramica.a = daBase64(panoramica.a);
+    // La panoramica deve avere le stesse specie e gli stessi giorni dei punteggi
+    if (panoramica.p.length === panoramica.gruppi.length * S * D) stato.italia.panoramica = panoramica;
+  } catch (errore) {
+    console.warn("Italia non disponibile:", errore);
+  }
+}
+
+/** Codici dei riquadri che toccano un rettangolo. */
+function riquadriIn(limiti) {
+  if (!stato.italia.indice) return [];
+  return Object.entries(stato.italia.indice)
+    .filter(([, [sud, ovest, nord, est]]) => limiti.intersects([[sud, ovest], [nord, est]]))
+    .map(([codice]) => codice);
+}
+
+/** Scarica un riquadro (una volta sola) e lo aggiunge alla mappa. */
+function caricaRiquadro(codice) {
+  if (!stato.italia.riquadri[codice]) {
+    stato.italia.riquadri[codice] = Promise.all([
+      caricaJson(`data/italia/${codice}.json`), caricaJson(`data/italia/meteo/${codice}.json`),
+    ]).then(([dati, meteo]) => {
+      const nuove = [];
+      dati.celle.forEach((c) => {
+        const gruppo = meteo[c.gruppo];
+        if (!gruppo) return;
+        c.zona_id = codice;
+        stato.statiche[c.id] = daBase64(dati.statiche[c.id]);
+        stato.punteggi.celle[c.id] = vociCellaItalia(c, gruppo);
+        nuove.push(c);
+      });
+      stato.celle.push(...nuove);
+      aggiungiCelle(nuove);
+      const zona = stato.zone[codice], area = stato.aree[codice];
+      if (zona) creaImmagineZona(zona);
+      if (area) preparaImmagineMorbida(area);
+      mostraImmaginiNuove(zona, area);
+      return true;
+    }).catch((errore) => {
+      console.error(errore);
+      delete stato.italia.riquadri[codice];   // si riproverà
+      return false;
+    });
+  }
+  return stato.italia.riquadri[codice];
+}
+
+/** Scarica i riquadri che toccano un rettangolo e aspetta che siano pronti. */
+async function caricaRiquadriIn(limiti) {
+  const codici = riquadriIn(limiti);
+  if (!codici.length) return;
+  const nuovi = codici.filter((c) => !stato.italia.riquadri[c]);
+  if (nuovi.length) messaggio("Carico i dati di questa zona…", 8000);
+  await Promise.all(codici.map(caricaRiquadro));
+  if (nuovi.length) document.getElementById("messaggio").hidden = true;
+}
+
+/** Riquadri entro `km` da un punto. */
+function caricaRiquadriIntorno(punto, km) {
+  const dLat = km / 111, dLon = km / (111 * Math.cos(punto.lat * Math.PI / 180));
+  return caricaRiquadriIn(L.latLngBounds([punto.lat - dLat, punto.lng - dLon], [punto.lat + dLat, punto.lng + dLon]));
+}
+
+/** Riquadri delle aree d'Italia di un elenco di quadrati ("area:R:C" o {area}). */
+function caricaRiquadriDi(aree) {
+  const codici = [...new Set(aree)].filter((a) => stato.italia.indice && stato.italia.indice[a]);
+  return Promise.all(codici.map(caricaRiquadro));
+}
+
+/** Quando la mappa si ferma da vicino, scarica i riquadri sullo schermo. */
+async function caricaRiquadriVisibili() {
+  if (mappa.getZoom() < ZOOM_DETTAGLIO || !stato.italia.indice) return;
+  const prima = stato.celle.length;
+  await caricaRiquadriIn(mappa.getBounds().pad(0.15));
+  if (stato.celle.length !== prima) {
+    if (!stato.selezione.size) segnaGiorniMigliori();
+    if (!document.getElementById("pannello-migliori").hidden) mostraMiglioriQui();
+  }
+}
+
+/** Le immagini di un riquadro appena arrivato si mostrano e si colorano. */
+function mostraImmaginiNuove(zona, area) {
+  if (eraModo === "netto" && zona) { zona.immagine.addTo(mappa); dipingiZona(zona); }
+  if (eraModo === "morbido" && area) { area.immagine.addTo(mappa); dipingiArea(area); }
+  disegnaPreferiti();
+  disegnaSelezione();
+}
+
+// --- Quadro d'insieme (mappa vista da lontano) ---
+
+/** Prepara l'immagine d'insieme: un rettangolo per gruppo, in proiezione di Mercatore. */
+function preparaPanoramica() {
+  const pan = stato.italia.panoramica;
+  if (!pan) return;
+  const [[sud, ovest], [nord, est]] = ITALIA;
+  const W = LARGHEZZA_PANORAMICA;
+  const scala = W / ((est - ovest) * Math.PI / 180);
+  const H = Math.round((mercatore(nord) - mercatore(sud)) * scala);
+  const x = (lon) => (lon - ovest) * Math.PI / 180 * scala;
+  const y = (lat) => (mercatore(nord) - mercatore(lat)) * scala;
+  pan.rettangoli = pan.gruppi.map(([s, o, n, e]) => {
+    const x0 = Math.floor(x(o)), y0 = Math.floor(y(n));
+    return [x0, y0, Math.max(1, Math.ceil(x(e)) - x0), Math.max(1, Math.ceil(y(s)) - y0)];
+  });
+  pan.tela = document.createElement("canvas");
+  pan.tela.width = W; pan.tela.height = H;
+  pan.sfumata = document.createElement("canvas");
+  pan.sfumata.width = W; pan.sfumata.height = H;
+  pan.immagine = L.imageOverlay(pan.tela.toDataURL(), ITALIA, { className: "quadrati-morbidi", interactive: false });
+}
+
+/** Punteggio di un gruppo del quadro d'insieme per le specie scelte. */
+function punteggioGruppo(i, giorno = stato.giorno) {
+  const pan = stato.italia.panoramica;
+  const S = stato.punteggi.specie.length, D = stato.punteggi.giorni.length;
+  const base = i * S * D + giorno;
+  const acqua = Math.max(...stato.scelte.map((s) => pan.a[base + s * D] / 100));
+  if (acqua <= 0) return 0;
+  let nessuna = 1;
+  stato.scelte.forEach((s) => { nessuna *= 1 - Math.min(1, pan.p[base + s * D] / 100 / acqua); });
+  return 100 * acqua * (1 - nessuna);
+}
+
+function dipingiPanoramica() {
+  const pan = stato.italia.panoramica;
+  if (!pan) return;
+  const ctx = pan.tela.getContext("2d");
+  ctx.clearRect(0, 0, pan.tela.width, pan.tela.height);
+  pan.rettangoli.forEach(([x, y, w, h], i) => {
+    const [r, g, b, a] = TAVOLOZZA[Math.round(punteggioGruppo(i))];
+    ctx.fillStyle = `rgba(${r},${g},${b},${a / 255})`;
+    ctx.fillRect(x, y, w, h);
+  });
+  const sfuma = pan.sfumata.getContext("2d");
+  sfuma.clearRect(0, 0, pan.sfumata.width, pan.sfumata.height);
+  if ("filter" in sfuma) sfuma.filter = "blur(2px)";
+  sfuma.drawImage(pan.tela, 0, 0);
+  sfuma.filter = "none";
+  pan.sfumata.toBlob((blob) => {
+    if (!blob) return;
+    if (pan.url) URL.revokeObjectURL(pan.url);
+    pan.url = URL.createObjectURL(blob);
+    pan.immagine.setUrl(pan.url);
+  });
+}
+
+/** Gruppi del quadro d'insieme che si vedono sullo schermo. */
+function gruppiSulloSchermo() {
+  const pan = stato.italia.panoramica;
+  if (!pan) return [];
+  const vista = mappa.getBounds();
+  return pan.gruppi.map((b, i) => ({ i, b }))
+    .filter(({ b }) => vista.intersects([[b[0], b[1]], [b[2], b[3]]]));
+}
+
+/** Da lontano si vede il quadro d'insieme invece dei quadrati? */
+function vistaDaLontano() {
+  return !!stato.italia.panoramica && mappa.getZoom() < ZOOM_DETTAGLIO;
+}
+
+// ---------------------------------------------------------------------------
 // Aree: pulsanti Foligno/Roma
 // ---------------------------------------------------------------------------
 
@@ -938,6 +1296,12 @@ function preparaAree() {
 }
 
 function vaiAllArea(area) {
+  if (area === "italia") {
+    mappa.fitBounds(ITALIA);
+    ricorda("area", area);
+    impostaArea(area);
+    return;
+  }
   const celle = stato.celle.filter((c) => c.area === area);
   if (!celle.length) return;
   mappa.fitBounds(limitiDi(celle));
@@ -1156,11 +1520,21 @@ async function accendiCanaloni() {
     messaggio("Non riesco a caricare i canaloni.");
     return;
   }
-  stato.canaloni = L.layerGroup(
-    Object.entries(stato.indiceCanaloni).map(([zona, limiti]) =>
-      L.imageOverlay(`data/canaloni/${zona}.png`, limiti, { opacity: 0.55, interactive: false }))
-  ).addTo(mappa);
+  stato.canaloni = L.layerGroup().addTo(mappa);
+  stato.canaloniMessi = new Set();
+  aggiornaCanaloni();
   if (mappa.getZoom() < 12) messaggio("Ingrandisci la mappa per vedere bene i canaloni (in blu).");
+}
+
+/** Aggiunge le immagini dei canaloni che si vedono (da zoom 10 in su: sono pesanti). */
+function aggiornaCanaloni() {
+  if (!stato.canaloni || !stato.indiceCanaloni || mappa.getZoom() < ZOOM_DETTAGLIO) return;
+  const vista = mappa.getBounds().pad(0.2);
+  Object.entries(stato.indiceCanaloni).forEach(([zona, limiti]) => {
+    if (stato.canaloniMessi.has(zona) || !vista.intersects(limiti)) return;
+    stato.canaloniMessi.add(zona);
+    L.imageOverlay(`data/canaloni/${zona}.png`, limiti, { opacity: 0.55, interactive: false }).addTo(stato.canaloni);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1246,12 +1620,47 @@ function dentroPoligono(lat, lon, poligono) {
   return dentroAnello(lat, lon, poligono[0]) && !poligono.slice(1).some((b) => dentroAnello(lat, lon, b));
 }
 
+/** Le aree protette di un riquadro d'Italia (una volta sola); null se non ci sono. */
+function areeProtetteRiquadro(codice) {
+  if (!stato.italia.indice || !stato.italia.indice[codice]) return Promise.resolve(null);
+  if (!(codice in stato.italia.protette)) {
+    stato.italia.protette[codice] = caricaJson(`data/aree_protette/${codice}.json`).catch(() => null);
+  }
+  return stato.italia.protette[codice];
+}
+
+/** Il riquadro d'Italia che contiene un punto (es. "i4250n1200"). */
+function riquadroDi(lat, lon) {
+  const sud = 35.5 + Math.floor((lat - 35.5) / 0.5) * 0.5, ovest = 6.5 + Math.floor((lon - 6.5) / 0.5) * 0.5;
+  const cifre = (x, n) => String(Math.round(x * 100)).padStart(n, "0");
+  return `i${cifre(sud, 4)}n${cifre(ovest, 4)}`;
+}
+
+function disegnaAreeProtette(dati) {
+  L.geoJSON(dati, {
+    interactive: false,
+    style: (f) => f.properties.tipo === "parco"
+      ? { color: "#6a1b9a", weight: 2, dashArray: "6 4", fillColor: "#6a1b9a", fillOpacity: 0.06 }
+      : { color: "#00796b", weight: 1.5, dashArray: "2 4", fill: false },
+  }).addTo(stato.stratoProtette);
+}
+
+/** Con lo strato acceso, aggiunge le aree protette dei riquadri sullo schermo (da vicino). */
+function aggiornaAreeProtette() {
+  const strato = stato.stratoProtette;
+  if (!strato || !mappa.hasLayer(strato) || !strato.messe || mappa.getZoom() < 9) return;
+  riquadriIn(mappa.getBounds().pad(0.2)).forEach((codice) => {
+    if (strato.messe.has(codice)) return;
+    strato.messe.add(codice);
+    areeProtetteRiquadro(codice).then((dati) => { if (dati) disegnaAreeProtette(dati); });
+  });
+}
+
 /** Aree protette che contengono il punto. */
 async function areeProtetteInPunto(punto) {
-  const dati = await caricaAreeProtette();
-  if (!dati) return [];
+  const [base, riquadro] = await Promise.all([caricaAreeProtette(), areeProtetteRiquadro(riquadroDi(punto.lat, punto.lng))]);
   const trovate = [];
-  dati.features.forEach((f) => {
+  [...(base ? base.features : []), ...(riquadro ? riquadro.features : [])].forEach((f) => {
     const g = f.geometry;
     const poligoni = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
     if (poligoni.some((pol) => dentroPoligono(punto.lat, punto.lng, pol))) trovate.push(f.properties);
@@ -1344,7 +1753,7 @@ async function apriSchedaQuadrato(q) {
       </dl>
       ${grafico}
       ${fattori}
-      <p class="nota">Il meteo è quello della zona di 3 km intorno. <a href="info.html">Come si calcola</a></p>
+      <p class="nota">${q.cella.gruppo ? "Il meteo è quello della zona di circa 15 km intorno, con la temperatura corretta per la quota di questa cella." : "Il meteo è quello della zona di 3 km intorno."} <a href="info.html">Come si calcola</a></p>
     </div>`;
 
   const finestra = L.popup().setLatLng(centro).setContent(html).openOn(mappa);
@@ -1381,7 +1790,7 @@ function trovaPosizione() {
   messaggio("Cerco la tua posizione…", 10000);
 
   navigator.geolocation.getCurrentPosition(
-    (pos) => {
+    async (pos) => {
       const punto = L.latLng(pos.coords.latitude, pos.coords.longitude);
       if (segnaPosizione) segnaPosizione.remove();
       segnaPosizione = L.layerGroup([
@@ -1392,6 +1801,7 @@ function trovaPosizione() {
       document.getElementById("messaggio").hidden = true;
       if (stato.selezionando) impostaModalita(false);
       stato.posizione = punto;
+      await caricaRiquadriIntorno(punto, 40);
       stato.vicinoMostrato = 0;
       aggiornaVicini();
       // Inquadra te e i tre posti
@@ -1550,6 +1960,7 @@ function mostraMiglioriQui() {
   pannello.hidden = false;
   document.getElementById("migliori-qui").setAttribute("aria-pressed", "true");
   document.getElementById("migliori-giorno").textContent = dataBreve(stato.punteggi.giorni[stato.giorno]);
+  if (vistaDaLontano()) { miglioriZoneDaLontano(); return; }
 
   const candidati = quadratiSulloSchermo()
     .map((q) => ({ q, p: punteggioQuadrato(q.cella, q.k), centro: L.latLngBounds(confiniQuadrato(q.area, q.R, q.C)).getCenter() }))
@@ -1585,6 +1996,43 @@ function mostraMiglioriQui() {
       mappa.setView(c.centro, Math.max(mappa.getZoom(), 15));
     });
   });
+}
+
+/** Da lontano: le 5 zone da 15 km migliori sullo schermo. */
+function miglioriZoneDaLontano() {
+  const pan = stato.italia.panoramica;
+  const scelti = gruppiSulloSchermo()
+    .map((x) => ({ ...x, p: punteggioGruppo(x.i) }))
+    .filter((x) => x.p >= 1)
+    .sort((a, b) => b.p - a.p)
+    .slice(0, MIGLIORI_QUI);
+  const elenco = document.getElementById("elenco-migliori");
+  if (!scelti.length) {
+    elenco.innerHTML = `<li class="vuoto">Nessuna zona favorevole sullo schermo per le specie e il giorno scelti.</li>`;
+    return;
+  }
+  elenco.innerHTML = scelti.map((x, n) => `<li><button type="button" data-zona="${n}">
+      <span class="numero-posto">${n + 1}</span>
+      <span class="dettagli-posto">
+        <strong style="color:${colore(x.p)}">${Math.round(x.p)}</strong> ${giudizio(x.p).toLowerCase()} nel posto migliore
+        <span class="luogo">${pan.nomi ? `Zona di ${testoSicuro(pan.nomi[x.i])}` : "Zona"} (15 km)</span>
+      </span>
+    </button></li>`).join("");
+  elenco.querySelectorAll("button[data-zona]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const [s, o, n, e] = scelti[Number(b.dataset.zona)].b;
+      chiudiMiglioriQui();
+      // Ci si avvicina e si apre la lista dei quadrati migliori di quella zona
+      mappa.once("moveend", () => setTimeout(mostraMiglioriQuiQuandoPronto, 50));
+      mappa.fitBounds([[s, o], [n, e]]);
+    });
+  });
+}
+
+/** Apre "Migliori qui" quando i riquadri sullo schermo sono arrivati. */
+async function mostraMiglioriQuiQuandoPronto() {
+  await caricaRiquadriIn(mappa.getBounds());
+  mostraMiglioriQui();
 }
 
 // ---------------------------------------------------------------------------
@@ -1717,6 +2165,8 @@ async function cercaPosto(testo) {
     return;
   }
 
+  await Promise.all(risultati.map((r) => caricaRiquadriIntorno(L.latLng(Number(r.lat), Number(r.lon)), RAGGIO_RICERCA_KM + 1)));
+  if (document.getElementById("ricerca").hidden) return;
   const giorno = dataBreve(stato.punteggi.giorni[stato.giorno]);
   const voci = risultati.map((r) => {
     const punto = L.latLng(Number(r.lat), Number(r.lon));
@@ -1867,7 +2317,8 @@ function sezionePreferito(box, q) {
 }
 
 /** Elenco dei preferiti con punteggio di oggi, tendenza e gli 8 giorni. */
-function mostraPreferiti() {
+async function mostraPreferiti() {
+  await caricaRiquadriDi(preferiti.map((f) => f.area));
   const pannello = document.getElementById("pannello-preferiti");
   const elenco = document.getElementById("elenco-preferiti");
   pannello.hidden = false;

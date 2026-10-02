@@ -12,7 +12,7 @@
  * il numero di VERSIONE.
  */
 
-const VERSIONE = "fungometer-v21";
+const VERSIONE = "fungometer-v22";
 
 const FILE_APP = [
   "./",

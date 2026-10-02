@@ -14,7 +14,11 @@ giorni, quantità): l'app mostra i confini e rimanda alle regole, che vanno
 sempre verificate sul sito dell'ente.
 
 Uso:
-    python scripts/scarica_aree_protette.py
+    python scripts/scarica_aree_protette.py            # Foligno e Roma: docs/data/aree_protette.json
+    python scripts/scarica_aree_protette.py --italia   # un file per riquadro d'Italia:
+                                                       # docs/data/aree_protette/<riquadro>.json
+Con --italia lavora sui riquadri di docs/data/italia/indice.json (scritto da
+prepara_italia.py) e salta quelli già scaricati.
 """
 
 import json
@@ -87,7 +91,50 @@ def nome_pulito(nome):
     return nome
 
 
+def elementi_ritagliati(rettangolo, chiave_extra, visti=None):
+    """Poligoni delle due fonti che toccano il rettangolo, ritagliati e semplificati."""
+    visti = set() if visti is None else visti
+    ritaglio = box(*rettangolo)
+    risultato = []
+    for livello, tipo, campo_nome, campo_codice in FONTI:
+        for el in scarica(livello, rettangolo):
+            p = el["properties"]
+            codice = str(p.get(campo_codice) or "")
+            chiave = (tipo, codice, chiave_extra)
+            if not el.get("geometry") or chiave in visti:
+                continue
+            visti.add(chiave)
+            forma = shape(el["geometry"]).buffer(0).intersection(ritaglio)
+            forma = forma.simplify(SEMPLIFICA_GRADI, preserve_topology=True)
+            if forma.is_empty:
+                continue
+            risultato.append({
+                "type": "Feature",
+                "properties": {"tipo": tipo, "nome": nome_pulito(p.get(campo_nome)), "codice": codice},
+                "geometry": json.loads(json.dumps(mapping(forma)), parse_float=lambda x: round(float(x), 5)),
+            })
+    return risultato
+
+
+def main_italia():
+    """Un file per riquadro, ritagliato sul riquadro: l'app scarica solo quelli che servono."""
+    indice = json.loads((RADICE / "docs" / "data" / "italia" / "indice.json").read_text(encoding="utf-8"))
+    cartella = RADICE / "docs" / "data" / "aree_protette"
+    cartella.mkdir(parents=True, exist_ok=True)
+    for n, (codice, (sud, ovest, nord, est, _)) in enumerate(sorted(indice.items()), start=1):
+        uscita = cartella / f"{codice}.json"
+        if uscita.exists():
+            continue
+        risultato = elementi_ritagliati((ovest, sud, est, nord), codice)
+        uscita.write_text(json.dumps({"type": "FeatureCollection", "features": risultato}, ensure_ascii=False,
+                                     separators=(",", ":")), encoding="utf-8")
+        print(f"[{n}/{len(indice)}] {codice}: {len(risultato)} aree ({uscita.stat().st_size / 1024:.0f} KB)", flush=True)
+
+
 def main():
+    if "--italia" in sys.argv:
+        main_italia()
+        return
     config = carica_aree(RADICE / "config" / "aree.yaml")
     risultato, visti = [], set()
     for codice_area, area in config["aree"].items():

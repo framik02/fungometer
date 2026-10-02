@@ -1,10 +1,14 @@
-# Aggiorna i punteggi ogni mattina alle 6 (ora italiana) e salva il risultato.
+# Aggiorna i punteggi ogni mattina e salva il risultato.
+#
+# Parte alle 4 e un quarto (ora italiana): con il meteo di tutta Italia il
+# lavoro dura circa un'ora e un quarto, per stare sotto le 5.000 chiamate
+# all'ora di Open-Meteo, e i dati nuovi sono pronti prima delle 6.
 #
 # Il cron di GitHub usa l'ora UTC e non conosce l'ora legale:
-#   04:00 UTC = 06:00 in Italia d'estate (CEST)
-#   05:00 UTC = 06:00 in Italia d'inverno (CET)
+#   02:17 UTC = 04:17 in Italia d'estate (CEST)
+#   03:17 UTC = 04:17 in Italia d'inverno (CET)
 # Quindi partiamo a entrambi gli orari e lo script, con --controlla-ora,
-# lavora solo se in Italia sono passate le 6 e oggi non l'ha ancora fatto.
+# lavora solo se in Italia sono passate le 4 e oggi non l'ha ancora fatto.
 # Il minuto 17 evita il picco di carico all’inizio dell’ora su GitHub Actions.
 # GitHub a volte avvia i cron con qualche decina di minuti di ritardo: è normale.
 #
@@ -14,8 +18,8 @@ name: Aggiorna punteggi
 
 on:
   schedule:
-    - cron: "17 4 * * *"
-    - cron: "17 5 * * *"
+    - cron: "17 2 * * *"
+    - cron: "17 3 * * *"
   workflow_dispatch:
 
 # Serve per fare il commit del nuovo punteggi.json
@@ -30,7 +34,7 @@ concurrency:
 jobs:
   aggiorna:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 150
     env:
       # Mostra subito le stampe di Python nel log, invece che tutte alla fine
       PYTHONUNBUFFERED: "1"

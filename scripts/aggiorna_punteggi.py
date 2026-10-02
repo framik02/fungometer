@@ -56,9 +56,12 @@ from zoneinfo import ZoneInfo
 
 RADICE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RADICE))
+sys.path.insert(0, str(RADICE / "scripts"))
 
 from fungometer.griglia import SOTTOCELLE_PER_LATO  # noqa: E402
+from fungometer.italia import GRADIENTE_TERMICO  # noqa: E402
 from fungometer.meteo import scarica_meteo  # noqa: E402
+from aggiorna_italia import aggiorna_italia  # noqa: E402
 from fungometer.punteggio import (  # noqa: E402
     carica_specie,
     fattore_stagione,
@@ -157,6 +160,13 @@ def calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni):
             "giorni_temperatura": comune["temperatura"]["giorni_media"],
             "effetto_se_bagnato": comune["terreno"]["effetto_se_bagnato"],
             "sottocelle_per_lato": SOTTOCELLE_PER_LATO,
+            # Per le celle d'Italia l'app rifà acqua, temperatura e stagione
+            # (fungometer/italia.py): servono le stesse regole del programma
+            "acqua": comune["acqua"],
+            "bonus_calo": comune["temperatura"]["bonus_calo"],
+            "stagione": comune.get("stagione"),
+            "gelo": comune.get("gelo"),
+            "gradiente_termico": GRADIENTE_TERMICO,
         },
         "giorni": giorni,
         "specie": uscita_specie,
@@ -223,14 +233,16 @@ def scrivi_json(dati, percorso, stampa=True):
     return kb
 
 
-def serve_aggiornare(percorso_punteggi, ora_minima=6):
+def serve_aggiornare(percorso_punteggi, ora_minima=4):
     """Decide se è il momento di lavorare (usato dal cron di GitHub Actions).
 
     Il cron di GitHub ragiona in ora UTC e non conosce l'ora legale, quindi il
-    workflow parte due volte (04:00 e 05:00 UTC). Qui si lavora solo se:
-    - in Italia sono almeno le 6;
+    workflow parte due volte (02:17 e 03:17 UTC). Qui si lavora solo se:
+    - in Italia sono almeno le 4;
     - il file di oggi non è ancora stato scritto.
-    Così l'aggiornamento avviene una volta sola, alle 6, estate e inverno.
+    Così l'aggiornamento parte una volta sola, alle 4 e un quarto, estate e
+    inverno. Con il meteo di tutta Italia dura circa un'ora e un quarto (il
+    limite orario di Open-Meteo): i dati nuovi sono pronti prima delle 6.
     """
     adesso = datetime.now(FUSO)
     if adesso.hour < ora_minima:
@@ -250,8 +262,11 @@ def main():
     parser.add_argument(
         "--controlla-ora",
         action="store_true",
-        help="lavora solo se in Italia sono passate le 6 e oggi non è ancora stato fatto",
+        help="lavora solo se in Italia sono passate le 4 e oggi non è ancora stato fatto",
     )
+    parser.add_argument("--senza-italia", action="store_true", help="solo Foligno e Roma (per le prove)")
+    parser.add_argument("--solo-italia", action="store_true",
+                        help="rifà solo l'Italia, con i punteggi di Foligno e Roma già scritti oggi")
     args = parser.parse_args()
 
     uscita_punteggi = RADICE / "docs" / "data" / "punteggi.json"
@@ -260,6 +275,17 @@ def main():
 
     with open(RADICE / "data" / "celle.json", encoding="utf-8") as f:
         celle = json.load(f)
+
+    if args.solo_italia:
+        config = carica_specie(RADICE / "config" / "specie.yaml")
+        dati = json.loads(uscita_punteggi.read_text(encoding="utf-8"))
+        celle_dati = {}
+        for area in dati.get("aree", []):
+            parte = RADICE / "docs" / "data" / f"punteggi_{area}.json"
+            celle_dati.update(json.loads(parte.read_text(encoding="utf-8"))["celle"])
+        statiche = json.loads((RADICE / "docs" / "data" / "statiche.json").read_text(encoding="utf-8"))
+        aggiorna_italia(config, None, dati["giorni"], celle_dati, celle, statiche)
+        return
     with open(RADICE / "data" / "sottocelle.json", encoding="utf-8") as f:
         sottocelle = json.load(f)
     config = carica_specie(RADICE / "config" / "specie.yaml")
@@ -275,6 +301,7 @@ def main():
     giorni = date_meteo[inizio: inizio + GIORNI_FUTURI]
 
     dati = calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni)
+    celle_dati = dict(dati["celle"])
     # Un file per area, così ognuno resta sotto 1 MB anche con molte specie
     per_area = {}
     for cella in celle:
@@ -291,6 +318,9 @@ def main():
         totale += scrivi_json(contenuto, RADICE / "docs" / "data" / "sottocelle" / f"{zona_id}.json",
                               stampa=False)
     print(f"Scritte le sottocelle di tutte le zone ({totale:.0f} KB in totale)")
+
+    if not args.senza_italia:
+        aggiorna_italia(config, date_meteo, giorni, celle_dati, celle, statiche_leggere(celle, statici, config))
 
     if kb > 1024:
         sys.exit("ATTENZIONE: un file dei punteggi supera 1 MB")

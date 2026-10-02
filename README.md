@@ -1,8 +1,10 @@
 # FungoMeter
 
 Una mappa che ogni mattina dà un punteggio da 0 a 100 a quanto sono favorevoli
-le condizioni per trovare cinque specie di funghi nei dintorni di Foligno e di
-Roma, in quadrati da 3 km che diventano quadrati da 500 m quando si ingrandisce.
+le condizioni per trovare undici specie di funghi in tutta Italia, in quadrati
+da 500 m. Intorno a Foligno e Roma il meteo è a 3 km e il tipo di bosco viene
+dalle carte regionali; nel resto d'Italia il meteo è a circa 15 km, corretto
+per la quota di ogni cella, e l'ambiente viene da Corine.
 Funziona dal browser del telefono e si può installare come app.
 
 **App:** https://framik02.github.io/fungometer/
@@ -137,6 +139,29 @@ Da sapere:
 - Se una mattina l'aggiornamento non arriva, la app mostra un avviso giallo
   "i dati sono di ieri".
 
+## Preparare tutta Italia
+
+```
+.venv\Scripts\python scripts\prepara_italia.py
+.venv\Scripts\python scripts\scarica_aree_protette.py --italia
+```
+
+Divide l'Italia in riquadri di mezzo grado (`fungometer/italia.py`), tiene solo
+le celle in Italia (confini ISTAT, da scaricare una volta in
+`data/raw/istat/`) con un ambiente adatto ad almeno una specie, e scrive per
+ogni riquadro `docs/data/italia/<riquadro>.json`, le schede in
+`docs/data/sottocelle/` e i canaloni. Alla fine scrive l'elenco dei riquadri
+(`docs/data/italia/indice.json`) e dei gruppi meteo da 15 km
+(`data/italia_gruppi.json`). La prima volta scarica circa 3 GB di DEM e Corine
+e ci mette un paio d'ore; se si interrompe riparte da dove era. Dopo un
+cambio di `config/specie.yaml` basta `prepara_italia.py --pubblica`.
+
+Ogni mattina `aggiorna_punteggi.py` scarica anche il meteo dei gruppi e scrive
+`docs/data/italia/meteo/<riquadro>.json` e `docs/data/italia/panoramica.json`
+(il quadro d'insieme per la mappa vista da lontano). Per stare sotto le 5.000
+chiamate all'ora di Open-Meteo il lavoro dura circa un'ora e un quarto: per
+questo parte alle 4 e un quarto.
+
 ## Modificare le soglie delle specie
 
 Tutto sta in `config/specie.yaml`. Per esempio, per chiedere ai porcini estivi
@@ -191,7 +216,8 @@ supera.
 | Comando | Cosa fa |
 |---|---|
 | `python -m pytest` | lancia i test |
-| `python scripts/aggiorna_punteggi.py` | calcola i punteggi di oggi (circa 6 minuti) |
+| `python scripts/aggiorna_punteggi.py` | calcola i punteggi di oggi, Italia compresa (circa un'ora e un quarto) |
+| `python scripts/aggiorna_punteggi.py --senza-italia` | solo Foligno e Roma (circa 6 minuti) |
 | `python scripts/prova_storica.py` | punteggi su agosto-novembre 2023-2025 in 9 posti noti, nella loro sottocella |
 | `python scripts/scarica_aree_protette.py` | riscarica i confini di parchi, riserve e siti Natura 2000 (EEA) |
 | `python scripts/crea_icone.py` | ridisegna le icone (serve Pillow) |

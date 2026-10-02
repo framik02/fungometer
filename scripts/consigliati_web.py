@@ -99,6 +99,93 @@ ZONE_AMPIE = {
     "monte cucco": (43.37, 12.73), "sibillini": (42.85, 13.20), "monti sibillini": (42.85, 13.20),
     "castelluccio": (42.83, 13.21), "forca canapine": (42.76, 13.20), "valnerina": (42.78, 12.88),
     "monteluco": (42.73, 12.76), "monti prenestini": (41.90, 12.93), "manziana": (42.13, 12.13),
+    # Resto d'Italia (centro approssimato della zona)
+    "valtellina": (46.17, 9.87),
+    "val brembana": (45.88, 9.67),
+    "val seriana": (45.88, 9.88),
+    "valcamonica": (46.05, 10.32),
+    "oltrepò pavese": (44.85, 9.2),
+    "val di fiemme": (46.29, 11.5),
+    "val di sole": (46.33, 10.85),
+    "val di non": (46.38, 11.05),
+    "val rendena": (46.1, 10.7),
+    "lagorai": (46.15, 11.45),
+    "val pusteria": (46.78, 12.0),
+    "altopiano di asiago": (45.88, 11.5),
+    "asiago": (45.88, 11.51),
+    "cansiglio": (46.06, 12.4),
+    "monte baldo": (45.7, 10.83),
+    "lessinia": (45.65, 11.05),
+    "cadore": (46.47, 12.35),
+    "agordino": (46.28, 12.03),
+    "carnia": (46.45, 12.95),
+    "tarvisio": (46.5, 13.58),
+    "val resia": (46.37, 13.3),
+    "val d'aveto": (44.53, 9.38),
+    "sassello": (44.48, 8.49),
+    "val di vara": (44.28, 9.7),
+    "borgotaro": (44.49, 9.77),
+    "borgo val di taro": (44.49, 9.77),
+    "albareto": (44.45, 9.7),
+    "val taro": (44.5, 9.8),
+    "val trebbia": (44.75, 9.4),
+    "corno alle scale": (44.12, 10.83),
+    "monte cimone": (44.19, 10.7),
+    "foreste casentinesi": (43.85, 11.8),
+    "garfagnana": (44.1, 10.4),
+    "lunigiana": (44.3, 9.95),
+    "abetone": (44.14, 10.66),
+    "monte amiata": (42.88, 11.62),
+    "amiata": (42.88, 11.62),
+    "casentino": (43.75, 11.8),
+    "pratomagno": (43.65, 11.65),
+    "colline metallifere": (43.15, 10.95),
+    "mugello": (43.97, 11.4),
+    "monte catria": (43.47, 12.7),
+    "monte nerone": (43.55, 12.52),
+    "bocca trabaria": (43.6, 12.25),
+    "montefeltro": (43.8, 12.35),
+    "monte peglia": (42.83, 12.18),
+    "monti ernici": (41.8, 13.4),
+    "monti aurunci": (41.33, 13.7),
+    "maiella": (42.08, 14.1),
+    "majella": (42.08, 14.1),
+    "gran sasso": (42.45, 13.6),
+    "parco d'abruzzo": (41.8, 13.8),
+    "pescasseroli": (41.8, 13.79),
+    "roccaraso": (41.85, 14.08),
+    "monti della laga": (42.65, 13.4),
+    "monte velino": (42.15, 13.38),
+    "matese": (41.45, 14.4),
+    "capracotta": (41.83, 14.27),
+    "alto molise": (41.8, 14.3),
+    "monti picentini": (40.78, 14.98),
+    "cilento": (40.3, 15.2),
+    "monte terminio": (40.85, 14.94),
+    "partenio": (40.98, 14.7),
+    "laceno": (40.8, 15.1),
+    "vallo di diano": (40.4, 15.6),
+    "foresta umbra": (41.82, 16.0),
+    "gargano": (41.8, 15.9),
+    "pollino": (39.92, 16.2),
+    "monte vulture": (40.95, 15.63),
+    "sirino": (40.13, 15.83),
+    "gallipoli cognato": (40.53, 16.12),
+    "sila": (39.3, 16.55),
+    "camigliatello": (39.34, 16.45),
+    "aspromonte": (38.17, 15.92),
+    "serre calabresi": (38.55, 16.3),
+    "nebrodi": (37.9, 14.6),
+    "madonie": (37.85, 14.03),
+    "etna": (37.75, 15.0),
+    "peloritani": (38.1, 15.4),
+    "ficuzza": (37.88, 13.38),
+    "gennargentu": (40.02, 9.3),
+    "supramonte": (40.2, 9.5),
+    "limbara": (40.85, 9.17),
+    "montiferru": (40.15, 8.6),
+    "marganai": (39.33, 8.6),
+    "barbagia": (40.1, 9.2),
 }
 
 
@@ -114,10 +201,16 @@ def distanza_km(a, b):
 
 
 def toponimi():
-    """{nome normalizzato: (nome, lat, lon, tipo)}, solo dentro le nostre aree e non ambigui."""
+    """{nome normalizzato: (nome, lat, lon, tipo)}, solo dentro le aree coperte e non ambigui.
+
+    Le aree coperte sono le zone di Foligno e Roma più i riquadri d'Italia
+    (docs/data/italia/indice.json, scritto da prepara_italia.py)."""
     config = carica_aree(RADICE / "config" / "aree.yaml")
     rettangoli = [(z["sud"] - 0.03, z["nord"] + 0.03, z["ovest"] - 0.03, z["est"] + 0.03)
                   for a in config["aree"].values() for z in a["zone"]]
+    indice = RADICE / "docs" / "data" / "italia" / "indice.json"
+    if indice.exists():
+        rettangoli += [(s, n, o, e) for s, o, n, e, _ in json.loads(indice.read_text(encoding="utf-8")).values()]
     dentro = lambda lat, lon: any(s <= lat <= n and o <= lon <= e for s, n, o, e in rettangoli)
 
     utili = {"P": None, "T": {"MT", "HLL", "PK", "PASS", "VAL", "MTS", "PLN", "RDGE", "SPUR", "HLLS"},

@@ -1,5 +1,7 @@
 # Dipendenze dello script giornaliero (quelle che installa GitHub Actions)
 requests>=2.31
 PyYAML>=6.0
+# Calcoli sui quadrati di tutta Italia (aggiorna_italia.py)
+numpy>=1.26
 # Fusi orari: su Windows Python non li ha di suo
 tzdata; sys_platform == "win32"

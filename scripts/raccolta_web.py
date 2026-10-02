@@ -37,6 +37,24 @@ ZONE = [
     "Monti Simbruini", "Monte Livata", "Subiaco", "Filettino", "Monti Lepini", "Carpineto Romano",
     "Terminillo", "Leonessa",
 ]
+# Le zone da funghi più note del resto d'Italia
+ZONE_ITALIA = [
+    "Abetone", "Agordino", "Albareto", "Alto Molise", "Altopiano di Asiago", "Asiago", "Aspromonte",
+    "Barbagia", "Bocca Trabaria", "Borgotaro", "Cadore", "Camigliatello", "Cansiglio", "Capracotta", "Carnia",
+    "Casentino", "Cilento", "Colline Metallifere", "Corno alle Scale", "Etna", "Ficuzza", "Foresta Umbra",
+    "Foreste Casentinesi", "Gallipoli Cognato", "Garfagnana", "Gargano", "Gennargentu", "Gran Sasso",
+    "Laceno", "Lagorai", "Lessinia", "Limbara", "Lunigiana", "Madonie", "Maiella", "Marganai", "Matese",
+    "Monte Amiata", "Monte Baldo", "Monte Catria", "Monte Cimone", "Monte Nerone", "Monte Peglia",
+    "Monte Terminio", "Monte Velino", "Monte Vulture", "Montefeltro", "Monti Aurunci", "Monti Ernici",
+    "Monti Picentini", "Monti della Laga", "Montiferru", "Mugello", "Nebrodi", "Oltrepò Pavese",
+    "Parco d'Abruzzo", "Partenio", "Peloritani", "Pescasseroli", "Pollino", "Pratomagno", "Roccaraso",
+    "Sassello", "Serre Calabresi", "Sila", "Sirino", "Supramonte", "Tarvisio", "Val Brembana", "Val Pusteria",
+    "Val Rendena", "Val Resia", "Val Seriana", "Val Taro", "Val Trebbia", "Val d'Aveto", "Val di Fiemme",
+    "Val di Non", "Val di Sole", "Val di Vara", "Valcamonica", "Vallo di Diano", "Valtellina",
+]
+REGIONI = ["Piemonte", "Lombardia", "Trentino", "Alto Adige", "Veneto", "Friuli", "Liguria", "Emilia",
+           "Toscana", "Marche", "Abruzzo", "Molise", "Campania", "Puglia", "Basilicata", "Calabria",
+           "Sicilia", "Sardegna", "Valle d'Aosta"]
 GENERICHE = [
     "porcini Umbria", "funghi Umbria", "porcini Lazio", "funghi Lazio", "ovoli Lazio", "ovoli Umbria",
     "mazze di tamburo Umbria", "trombette dei morti Umbria", "prugnoli Sibillini", "galletti Umbria",
@@ -45,7 +63,11 @@ GENERICHE = [
 
 # Reddit: subreddit e parole chiave
 SUBREDDIT = ["italy", "Italia", "Umbria", "rome", "Roma", "funghi", "foraging", "mycology",
-             "Perugia", "lazio", "Mushrooms"]
+             "Perugia", "lazio", "Mushrooms",
+             # Regioni e città, per tutta Italia
+             "Toscana", "firenze", "Marche", "Abruzzo", "Piemonte", "torino", "Lombardia", "milano",
+             "Trentino", "AltoAdige", "Veneto", "FriuliVeneziaGiulia", "Liguria", "genova", "EmiliaRomagna",
+             "bologna", "Campania", "napoli", "Calabria", "Puglia", "basilicata", "sicilia", "sardegna"]
 CHIAVI_REDDIT = ["porcini", "funghi", "ovoli", "galletti", "finferli", "mazze di tamburo",
                  "chiodini", "trombette", "spugnole", "prugnoli", "boletus", "foraging Italy"]
 DA = "2015-01-01"
@@ -87,13 +109,22 @@ class YouTube:
         self.indice = 0
 
     def get(self, risorsa, **parametri):
-        """Una chiamata; se una chiave finisce la quota passa alla successiva."""
+        """Una chiamata; se una chiave finisce la quota passa alla successiva.
+
+        429 = troppe ricerche al minuto: si aspetta un minuto e si riprova.
+        Restituisce None solo se la risorsa non c'è (commenti disattivati, video tolto)."""
+        attese_429 = 0
         while self.indice < len(self.chiavi):
             parametri["key"] = self.chiavi[self.indice]
             r = requests.get(f"https://www.googleapis.com/youtube/v3/{risorsa}", params=parametri, timeout=60)
             if r.status_code == 403 and "quota" in r.text.lower():
                 log(f"quota finita per la chiave {self.indice + 1}, passo alla successiva")
                 self.indice += 1
+                continue
+            if r.status_code == 429 and attese_429 < 10:
+                attese_429 += 1
+                log(f"  {risorsa}: troppe richieste al minuto, aspetto 60 s")
+                time.sleep(60)
                 continue
             if r.status_code == 403 and "commentsDisabled" in r.text:
                 return None
@@ -108,12 +139,16 @@ def raccogli_youtube():
     yt = YouTube()
     video = leggi("youtube_video.json", {})
     fatte = set(leggi("youtube_ricerche_fatte.json", []))
-    ricerche = [f"{specie} {zona}" for zona in ZONE for specie in ("funghi", "porcini")] + GENERICHE
+    ricerche = ([f"{specie} {zona}" for zona in ZONE for specie in ("funghi", "porcini")] + GENERICHE
+                + [f"{specie} {zona}" for zona in ZONE_ITALIA for specie in ("funghi", "porcini")]
+                + [f"{specie} {regione}" for regione in REGIONI for specie in ("funghi", "porcini")])
     for q in ricerche:
         if q in fatte:
             continue
         risposta = yt.get("search", part="snippet", q=q, type="video", maxResults=50,
                           regionCode="IT", relevanceLanguage="it", publishedAfter=f"{DA}T00:00:00Z")
+        if risposta is None:   # ricerca non riuscita: resta da fare al prossimo giro
+            continue
         for el in (risposta or {}).get("items", []):
             vid = el["id"]["videoId"]
             if vid not in video:
