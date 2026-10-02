@@ -67,13 +67,7 @@ button, select { font: inherit; color: inherit; }
 
 /* --- Data di aggiornamento e avviso dati vecchi ------------------------ */
 
-.aggiornamento {
-  padding: 6px 16px;
-  font-size: 0.9rem;
-  background: var(--bosco-chiaro);
-  color: var(--bosco);
-  font-weight: 600;
-}
+.aggiornamento { margin-top: 8px; font-size: 0.75rem; color: var(--testo-tenue); }
 
 .avviso-vecchio {
   padding: 8px 16px;
@@ -84,31 +78,11 @@ button, select { font: inherit; color: inherit; }
 
 /* --- Comandi ---------------------------------------------------------- */
 
-.comandi {
-  padding: 8px 16px 6px;
-  background: var(--superficie);
-  border-bottom: 1px solid var(--bordo);
-}
-
-.riga-comandi {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-}
-
-.campo { display: flex; flex-direction: column; flex: 1; min-width: 0; font-size: 0.8rem; color: var(--testo-tenue); }
-.campo select {
-  margin-top: 2px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--bordo);
-  border-radius: var(--raggio);
-  background: var(--superficie);
-  font-size: 1rem;
-}
-
 /* Ricerca di un posto */
-.ricerca { position: relative; display: flex; gap: 6px; margin-bottom: 8px; }
+.ricerca {
+  position: relative; z-index: 1300; display: flex; gap: 6px; padding: 8px 12px;
+  background: var(--superficie); border-bottom: 1px solid var(--bordo);
+}
 .ricerca input {
   flex: 1; min-width: 0; padding: 9px 12px;
   border: 1px solid var(--bordo); border-radius: 999px; background: var(--sfondo);
@@ -149,46 +123,39 @@ button, select { font: inherit; color: inherit; }
 .risultati-ricerca .nota-ricerca { padding: 8px 12px; color: var(--testo-tenue); font-size: 0.85rem; }
 .risultati-ricerca .attribuzione { padding: 4px 12px; font-size: 0.7rem; color: var(--testo-tenue); text-align: right; }
 
-/* Scelta delle specie: riassunto che apre un pannello di caselle */
-.scelta-specie { position: relative; margin-top: 2px; }
-.scelta-specie summary {
-  list-style: none;
-  padding: 8px 28px 8px 10px;
-  border: 1px solid var(--bordo);
-  border-radius: var(--raggio);
-  background: var(--superficie);
-  color: var(--testo);
-  font-size: 1rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-.scelta-specie summary::-webkit-details-marker { display: none; }
-.scelta-specie summary::after {
-  content: "▾";
-  position: absolute;
-  right: 10px;
-  top: 8px;
-  color: var(--testo-tenue);
-}
-.pannello-specie {
-  position: absolute;
-  z-index: 1200;
-  top: calc(100% + 4px);
-  left: 0;
-  min-width: 100%;
-  width: max-content;
-  max-width: calc(100vw - 32px);
-  padding: 8px 10px;
-  border: 1px solid var(--bordo);
-  border-radius: var(--raggio);
-  background: var(--superficie);
-  box-shadow: var(--ombra);
-}
 .casella { display: flex; align-items: center; gap: 8px; padding: 7px 2px; color: var(--testo); font-size: 1rem; }
-.casella input { width: 20px; height: 20px; accent-color: var(--bosco); }
-.pannello-specie .spiegazione { margin: 6px 0 0; font-size: 0.75rem; color: var(--testo-tenue); max-width: 30ch; }
+.casella input { flex: 0 0 auto; margin: 0; width: 20px; height: 20px; accent-color: var(--bosco); }
+/* Tasto in alto a sinistra: specie e giorno scelti, apre il pannello */
+.bottone-filtri {
+  position: absolute; z-index: 990; left: 10px; top: 10px;
+  display: flex; align-items: center; gap: 6px;
+  max-width: calc(100% - 76px); padding: 7px 12px;
+  border: none; border-radius: 999px; background: var(--superficie); box-shadow: var(--ombra);
+  font-size: 0.9rem; cursor: pointer; text-align: left;
+}
+.riassunto-specie { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--bosco); }
+.riassunto-giorno { flex: 0 0 auto; padding-left: 6px; border-left: 1px solid var(--bordo); white-space: nowrap; }
+.bottone-filtri .freccina { color: var(--testo-tenue); }
+.bottone-filtri[aria-expanded="true"] .freccina { transform: rotate(180deg); }
+
+/* Pannello di specie, giorno e area: scende sopra la mappa */
+.filtri {
+  position: absolute; z-index: 990; left: 10px; right: 10px; top: 54px;
+  max-height: calc(100% - 64px); overflow-y: auto;
+  padding: 10px 12px; border-radius: 14px; background: var(--superficie); box-shadow: var(--ombra);
+}
+.filtri[hidden] { display: none; }
+.titolo-filtri { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--testo-tenue); }
+.titolo-filtri + * { margin-top: 2px; }
+.caselle-specie { display: grid; grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); column-gap: 8px; }
+.caselle-specie .casella { gap: 6px; padding: 4px 0; font-size: 0.88rem; line-height: 1.2; }
+.filtri .spiegazione { margin: 4px 0 10px; font-size: 0.72rem; color: var(--testo-tenue); }
+.piede-filtri {
+  position: sticky; bottom: -10px; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 6px -12px 0; padding: 8px 12px 10px; background: var(--superficie); border-top: 1px solid #eee7dc;
+}
+.filtri .chiudi-filtri { width: auto; padding: 8px 22px; }
+@media (min-width: 760px) { .filtri { right: auto; width: 520px; } }
 
 .aree { display: flex; gap: 4px; }
 .aree button {
@@ -203,7 +170,7 @@ button, select { font: inherit; color: inherit; }
 .giorni {
   display: flex;
   gap: 6px;
-  margin-top: 8px;
+  padding-top: 4px;
   overflow-x: auto;
   scrollbar-width: none;
   padding-bottom: 2px;
@@ -241,58 +208,20 @@ button, select { font: inherit; color: inherit; }
 .contenitore-mappa { position: relative; flex: 1; min-height: 0; }
 #mappa { position: absolute; inset: 0; background: #e8e4dc; }
 
-.bottone-canaloni {
-  position: absolute;
-  right: 12px;
-  bottom: 122px;
-  z-index: 800;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 999px;
-  background: var(--superficie);
-  color: #1d5aa6;
-  box-shadow: var(--ombra);
-  font-weight: 600;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.bottone-canaloni[aria-pressed="true"] { background: #1d5aa6; color: #fff; }
-
-.bottone-posizione {
-  position: absolute;
-  right: 12px;
-  bottom: 70px;
-  z-index: 800;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  border: none;
-  border-radius: 999px;
-  background: var(--superficie);
-  color: var(--bosco);
-  box-shadow: var(--ombra);
-  font-weight: 600;
-  cursor: pointer;
-}
-
 .legenda {
   position: absolute;
   left: 12px;
   bottom: 24px;
   z-index: 800;
-  width: min(220px, 55vw);
-  padding: 6px 10px;
+  width: min(150px, 40vw);
+  padding: 4px 8px;
   border-radius: var(--raggio);
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--ombra);
   font-size: 0.75rem;
 }
 .legenda-barra {
-  height: 10px;
+  height: 8px;
   border-radius: 5px;
   /* Stessa scala di app.js: verde (0) > giallo > arancio > rosso (100) */
   background: linear-gradient(to right, hsl(120 70% 40%), hsl(60 85% 45%), hsl(30 90% 48%), hsl(0 80% 45%));
@@ -303,12 +232,12 @@ button, select { font: inherit; color: inherit; }
 }
 .leaflet-control-layers-toggle { width: 36px !important; height: 36px !important; }
 
-.legenda-etichette { display: flex; justify-content: space-between; margin-top: 3px; color: var(--testo-tenue); }
+.legenda-etichette { display: flex; justify-content: space-between; margin-top: 1px; color: var(--testo-tenue); font-size: 0.7rem; line-height: 1.2; }
 
 .messaggio {
   position: absolute;
   left: 50%;
-  top: 56px;
+  top: 58px;
   transform: translateX(-50%);
   z-index: 900;
   max-width: calc(100% - 32px);
@@ -361,25 +290,6 @@ button, select { font: inherit; color: inherit; }
 .giorno-barra.scelto .etichetta { color: var(--bosco); font-weight: 700; }
 .giorno-barra .etichetta { white-space: nowrap; }
 .scheda .elenco-specie li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px solid #eee7dc; font-size: 0.85rem; }
-
-/* --- Piede ------------------------------------------------------------ */
-
-.piede {
-  padding: 6px 16px;
-  padding-bottom: max(6px, env(safe-area-inset-bottom));
-  font-size: 0.8rem;
-  background: var(--avviso);
-  border-top: 1px solid var(--avviso-bordo);
-}
-.link-avvertenze {
-  border: none;
-  background: none;
-  padding: 0;
-  color: var(--bosco);
-  font-weight: 600;
-  text-decoration: underline;
-  cursor: pointer;
-}
 
 /* --- Finestra delle avvertenze --------------------------------------- */
 
@@ -444,12 +354,6 @@ button, select { font: inherit; color: inherit; }
 .pagina th { background: var(--bosco-chiaro); }
 .pagina td em { color: var(--testo-tenue); }
 
-@media (min-width: 760px) {
-  .comandi { display: flex; align-items: flex-end; gap: 16px; }
-  .riga-comandi { flex: 0 0 420px; }
-  .giorni { margin-top: 0; }
-}
-
 /* --- Quadrati da 500 m ------------------------------------------------ */
 
 /* Da lontano il browser sfuma i pixel: gradiente */
@@ -457,31 +361,31 @@ button, select { font: inherit; color: inherit; }
 /* Da vicino ogni pixel resta un quadrato netto */
 .quadrati-netti .leaflet-image-layer.quadrati { image-rendering: pixelated; image-rendering: crisp-edges; }
 
-/* --- Modalità Mappa / Seleziona -------------------------------------- */
+/* --- Pulsanti tondi sulla mappa ---------------------------------------- */
+
+.bottone-tondo {
+  display: grid; place-items: center; width: 44px; height: 44px; padding: 0;
+  border: none; border-radius: 50%; background: var(--superficie); color: var(--bosco);
+  box-shadow: var(--ombra); cursor: pointer;
+}
+.bottone-tondo[aria-pressed="true"] { background: var(--bosco); color: #fff; }
 
 .modalita {
-  position: absolute;
-  right: 10px;
-  top: 10px;
-  z-index: 800;
-  display: flex;
-  gap: 0;
-  border-radius: 999px;
-  background: var(--superficie);
-  box-shadow: var(--ombra);
-  overflow: hidden;
+  position: absolute; z-index: 800; right: 10px; top: 62px;
+  display: flex; align-items: center; gap: 6px;
 }
-.modalita button {
-  padding: 8px 12px;
-  border: none;
-  background: transparent;
-  color: var(--bosco);
-  font-weight: 600;
-  font-size: 0.9rem;
-  cursor: pointer;
+.modalita .svuota {
+  padding: 7px 12px; border: none; border-radius: 999px; background: var(--superficie);
+  color: #a33; font-weight: 600; font-size: 0.85rem; box-shadow: var(--ombra); cursor: pointer;
 }
-.modalita button[aria-pressed="true"] { background: var(--bosco); color: #fff; }
-.modalita .svuota { color: #a33; border-left: 1px solid var(--bordo); }
+.modalita .svuota[hidden] { display: none; }
+
+.pulsanti-mappa {
+  position: absolute; z-index: 800; right: 10px; bottom: 28px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+#migliori-qui { color: #9a5b00; }
+#migliori-qui[aria-pressed="true"] { background: #9a5b00; color: #fff; }
 
 /* In modalità Seleziona il dito disegna invece di spostare la mappa */
 .selezionando #mappa { cursor: crosshair; touch-action: none; }
@@ -500,25 +404,6 @@ button, select { font: inherit; color: inherit; }
 
 /* --- Migliori qui ------------------------------------------------------ */
 
-.bottone-web {
-  position: absolute;
-  right: 12px;
-  bottom: 226px;
-  z-index: 800;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 999px;
-  background: var(--superficie);
-  color: #e0001b;
-  box-shadow: var(--ombra);
-  font-weight: 700;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.bottone-web[aria-pressed="true"] { background: #e0001b; color: #fff; }
-.scheda-aperta .bottone-web { display: none; }
-.vicini-aperti .bottone-web { bottom: 346px; }
-@media (max-height: 720px) { .vicini-aperti .bottone-web { display: none; } }
 .scheda-web .fonti-web { margin: 6px 0 0; padding-left: 18px; font-size: 0.8rem; }
 .scheda-web .estratto-web {
   margin: 6px 0; padding: 6px 8px; border-left: 3px solid #e0001b; border-radius: 4px;
@@ -526,23 +411,6 @@ button, select { font: inherit; color: inherit; }
 }
 .scheda-web .estratto-web span { display: block; margin-top: 3px; font-style: normal; font-size: 0.7rem; color: var(--testo-tenue); }
 .scheda-web .avviso-web { margin-top: 8px; font-size: 0.75rem; color: var(--testo-tenue); }
-
-.bottone-migliori {
-  position: absolute;
-  right: 12px;
-  bottom: 174px;
-  z-index: 800;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 999px;
-  background: var(--superficie);
-  color: #9a5b00;
-  box-shadow: var(--ombra);
-  font-weight: 600;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.bottone-migliori[aria-pressed="true"] { background: #9a5b00; color: #fff; }
 
 .pannello-migliori, .vicini {
   position: absolute;
@@ -626,43 +494,14 @@ button, select { font: inherit; color: inherit; }
 .segnaposto { width: 24px; height: 24px; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
 .segnaposto.attivo { width: 28px; height: 28px; background: #9a5b00; }
 
-/* Con la scheda dei posti vicini aperta, i pulsanti salgono e la legenda si nasconde */
-.vicini-aperti .legenda { display: none; }
-.vicini-aperti .bottone-posizione { bottom: 190px; }
-.vicini-aperti .bottone-canaloni { bottom: 242px; }
-.vicini-aperti .bottone-web {
-  position: absolute;
-  right: 12px;
-  bottom: 226px;
-  z-index: 800;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 999px;
-  background: var(--superficie);
-  color: #e0001b;
-  box-shadow: var(--ombra);
-  font-weight: 700;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.bottone-web[aria-pressed="true"] { background: #e0001b; color: #fff; }
-.scheda-aperta .bottone-web { display: none; }
-.vicini-aperti .bottone-web { bottom: 346px; }
-@media (max-height: 720px) { .vicini-aperti .bottone-web { display: none; } }
-.scheda-web .fonti-web { margin: 6px 0 0; padding-left: 18px; font-size: 0.8rem; }
-.scheda-web .estratto-web {
-  margin: 6px 0; padding: 6px 8px; border-left: 3px solid #e0001b; border-radius: 4px;
-  background: #fdf0f1; font-size: 0.8rem; font-style: italic; line-height: 1.35;
-}
-.scheda-web .estratto-web span { display: block; margin-top: 3px; font-style: normal; font-size: 0.7rem; color: var(--testo-tenue); }
-.scheda-web .avviso-web { margin-top: 8px; font-size: 0.75rem; color: var(--testo-tenue); }
+/* Con un pannello in basso aperto, legenda e pulsanti in basso si tolgono di mezzo */
+.vicini-aperti .legenda, .vicini-aperti .pulsanti-mappa,
+.contenitore-mappa:has(.pannello-migliori:not([hidden])) .legenda,
+.contenitore-mappa:has(.pannello-migliori:not([hidden])) .pulsanti-mappa { display: none; }
 
-.bottone-migliori { bottom: 294px; }
-
-/* Schermi bassi: con i posti vicini aperti non c'è spazio per tutti i pulsanti */
-@media (max-height: 720px) {
-  .vicini-aperti .bottone-migliori, .vicini-aperti .bottone-canaloni { display: none; }
-}
+/* Con una scheda aperta resta solo la mappa */
+.scheda-aperta .legenda, .scheda-aperta .pulsanti-mappa, .scheda-aperta .modalita,
+.scheda-aperta .bottone-filtri, .scheda-aperta .filtri { display: none; }
 
 /* Attribuzioni compatte: non devono coprire legenda e pulsanti */
 .leaflet-control-attribution { font-size: 10px; line-height: 1.3; max-width: 100%; }

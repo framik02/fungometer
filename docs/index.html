@@ -19,7 +19,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-  <link rel="stylesheet" href="stile.css?v=17">
+  <link rel="stylesheet" href="stile.css?v=18">
 </head>
 <body>
   <header class="testata">
@@ -44,64 +44,71 @@
     </div>
   </header>
 
-  <!-- Data dell'ultimo aggiornamento, sempre visibile -->
-  <div id="aggiornamento" class="aggiornamento">Caricamento dei dati…</div>
   <div id="avviso-vecchio" class="avviso-vecchio" hidden></div>
 
-  <section class="comandi" aria-label="Scelta di specie e giorno">
-    <!-- Ricerca di un posto (con Photon, dati OpenStreetMap): chiusa finché non tocchi la lente -->
-    <form id="ricerca" class="ricerca" role="search" hidden>
-      <input id="testo-ricerca" type="text" placeholder="Cerca un posto: monte, paese, bosco…"
-             aria-label="Cerca un posto" autocomplete="off" enterkeyhint="search">
-      <button type="button" id="chiudi-ricerca" class="chiudi-ricerca" aria-label="Chiudi la ricerca">×</button>
-      <ul id="risultati-ricerca" class="risultati-ricerca" hidden></ul>
-    </form>
-    <div class="riga-comandi">
-      <div class="campo">
-        <span>Specie</span>
-        <!-- Pannello con una casella per specie: si apre toccando il riassunto -->
-        <details id="scelta-specie" class="scelta-specie">
-          <summary id="riassunto-specie">Specie</summary>
-          <div class="pannello-specie">
-            <div id="caselle-specie"></div>
-            <p class="spiegazione">Con più specie conta l'occasione di trovarne almeno una, ma se manca l'acqua resta basso per tutte.</p>
-          </div>
-        </details>
-      </div>
-      <div class="aree" role="group" aria-label="Vai all'area">
-        <button type="button" data-area="foligno">Foligno</button>
-        <button type="button" data-area="roma">Roma</button>
-      </div>
-    </div>
-    <div id="giorni" class="giorni" role="tablist" aria-label="Giorno"></div>
-    <div id="nota-giorni" class="nota-giorni"></div>
-  </section>
+  <!-- Ricerca di un posto (con Photon, dati OpenStreetMap): chiusa finché non tocchi la lente -->
+  <form id="ricerca" class="ricerca" role="search" hidden>
+    <input id="testo-ricerca" type="text" placeholder="Cerca un posto: monte, paese, bosco…"
+           aria-label="Cerca un posto" autocomplete="off" enterkeyhint="search">
+    <button type="button" id="chiudi-ricerca" class="chiudi-ricerca" aria-label="Chiudi la ricerca">×</button>
+    <ul id="risultati-ricerca" class="risultati-ricerca" hidden></ul>
+  </form>
 
   <main class="contenitore-mappa">
     <div id="mappa" aria-label="Mappa dei punteggi"></div>
 
-    <button type="button" id="mia-posizione" class="bottone-posizione" title="La mia posizione">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-        <circle cx="12" cy="12" r="4" fill="currentColor"/>
-        <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/>
-      </svg>
-      <span>La mia posizione</span>
+    <!-- Un solo tasto mostra cosa stai guardando (specie e giorno) e apre i comandi -->
+    <button type="button" id="apri-filtri" class="bottone-filtri" aria-expanded="false" aria-controls="filtri">
+      <span id="riassunto-specie" class="riassunto-specie">Specie</span>
+      <span id="riassunto-giorno" class="riassunto-giorno"></span>
+      <span aria-hidden="true" class="freccina">▾</span>
     </button>
 
-    <button type="button" id="mostra-canaloni" class="bottone-canaloni" aria-pressed="false"
-            title="Mostra i canaloni e gli impluvi, dove il terreno trattiene l'umidità">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-        <path d="M3 5c4 0 5 4 9 4s5-4 9-4M3 12c4 0 5 4 9 4s5-4 9-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-      <span>Canaloni</span>
-    </button>
+    <section id="filtri" class="filtri" aria-label="Specie, area e giorno" hidden>
+      <div class="titolo-filtri">Specie</div>
+      <div id="caselle-specie" class="caselle-specie"></div>
+      <p class="spiegazione">Con più specie conta l'occasione di trovarne almeno una, ma se manca l'acqua resta basso per tutte.</p>
+      <div class="titolo-filtri">Giorno</div>
+      <div id="giorni" class="giorni" role="tablist" aria-label="Giorno"></div>
+      <div id="nota-giorni" class="nota-giorni"></div>
+      <div class="piede-filtri">
+        <div class="aree" role="group" aria-label="Vai all'area">
+          <button type="button" data-area="foligno">Foligno</button>
+          <button type="button" data-area="roma">Roma</button>
+        </div>
+        <button type="button" id="chiudi-filtri" class="bottone-primario chiudi-filtri">Fatto</button>
+      </div>
+      <div id="aggiornamento" class="aggiornamento">Caricamento dei dati…</div>
+    </section>
 
-    <button type="button" id="mostra-web" class="bottone-web" aria-pressed="false"
-            title="Posti citati nei commenti pubblici di YouTube e Reddit">● Dal web</button>
+    <!-- Seleziona: disegni la tua zona col dito -->
+    <div class="modalita">
+      <button type="button" id="svuota-selezione" class="svuota" hidden>Svuota</button>
+      <button type="button" id="modo-seleziona" class="bottone-tondo" aria-pressed="false"
+              aria-label="Seleziona la tua zona" title="Seleziona la tua zona: tocca i quadrati o disegna col dito">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path d="M4 9c0-3 3.6-5 8-5s8 2 8 5-3.6 5-8 5c-1.4 0-2.7-.2-3.8-.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M6.5 12.5c-1.7 1.2-1.6 3.3.2 4 1.3.5 2.3 1.6 1.8 3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
 
-    <button type="button" id="migliori-qui" class="bottone-migliori" aria-pressed="false"
-            title="I 5 quadrati migliori sullo schermo nel giorno scelto">★ Migliori qui</button>
+    <!-- Pulsanti in basso a destra: solo icone -->
+    <div class="pulsanti-mappa">
+      <button type="button" id="migliori-qui" class="bottone-tondo" aria-pressed="false"
+              aria-label="I 5 posti migliori sullo schermo" title="I 5 posti migliori sullo schermo nel giorno scelto">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path d="M9 20V8h6v12M3 20v-7h6M15 20v-9h6v9M2 20h20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button type="button" id="mia-posizione" class="bottone-tondo" aria-label="La mia posizione e i posti migliori vicino a te" title="La mia posizione">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" fill="currentColor"/>
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/>
+        </svg>
+      </button>
+    </div>
 
     <!-- I tuoi posti preferiti -->
     <div id="pannello-preferiti" class="pannello-migliori" hidden>
@@ -138,28 +145,16 @@
       </div>
     </div>
 
-    <!-- Modalità: Mappa (sposti e tocchi) o Seleziona (disegni la tua zona) -->
-    <div class="modalita" role="group" aria-label="Modalità">
-      <button type="button" id="modo-mappa" aria-pressed="true">Mappa</button>
-      <button type="button" id="modo-seleziona" aria-pressed="false">Seleziona</button>
-      <button type="button" id="svuota-selezione" class="svuota" hidden>Svuota</button>
-    </div>
-
     <div class="legenda" aria-label="Legenda: tocca per cambiare i colori" role="button" tabindex="0"
          title="Tocca per passare ai colori per daltonici (e ritorno)">
       <div class="legenda-barra"></div>
-      <div class="legenda-etichette"><span>0 sfavorevole</span><span>100 ottimo</span></div>
+      <div class="legenda-etichette"><span>0</span><span>100</span></div>
     </div>
 
     <div id="messaggio" class="messaggio" role="status" hidden></div>
   </main>
 
-  <footer class="piede">
-    Il punteggio non garantisce ritrovamenti e l'app non riconosce i funghi.
-    <button type="button" class="link-avvertenze" data-apri-avvertenze>Leggi le avvertenze</button>
-  </footer>
-
-  <!-- Avvertenze: si aprono dal pulsante in alto o dal piede; al primo accesso si aprono da sole -->
+  <!-- Avvertenze: si aprono dal pulsante in alto; al primo accesso si aprono da sole -->
   <dialog id="avvertenze" class="finestra">
     <h2>Prima di andare nel bosco</h2>
     <ul class="lista-avvertenze">
@@ -181,6 +176,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>

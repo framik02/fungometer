@@ -403,8 +403,8 @@ async function avvia() {
   preparaVicini();
   preparaMiglioriQui();
   preparaPreferiti();
-  preparaWeb();
   preparaRicerca();
+  preparaPannelloFiltri();
 
   // Prima inquadratura: l'ultima area scelta, altrimenti tutte e due
   const area = ricordato("area");
@@ -413,7 +413,6 @@ async function avvia() {
   ricolora();
 
   document.getElementById("mia-posizione").addEventListener("click", trovaPosizione);
-  document.getElementById("mostra-canaloni").addEventListener("click", alternaCanaloni);
 }
 
 // ---------------------------------------------------------------------------
@@ -476,12 +475,25 @@ function preparaFiltro() {
     contenitore.appendChild(riga);
   });
   aggiornaRiassuntoSpecie();
+}
 
-  // Il pannello si chiude toccando fuori
-  const pannello = document.getElementById("scelta-specie");
-  document.addEventListener("click", (ev) => {
-    if (pannello.open && !pannello.contains(ev.target)) pannello.open = false;
-  });
+/** Il pannello di specie, giorno e area: si apre e si chiude dal tasto in alto. */
+function preparaPannelloFiltri() {
+  const tasto = document.getElementById("apri-filtri");
+  const pannello = document.getElementById("filtri");
+  const contenitore = document.querySelector(".contenitore-mappa");
+  const apri = (si) => {
+    pannello.hidden = !si;
+    tasto.setAttribute("aria-expanded", String(si));
+  };
+  tasto.addEventListener("click", () => apri(pannello.hidden));
+  document.getElementById("chiudi-filtri").addEventListener("click", () => apri(false));
+  // Un tocco sulla mappa col pannello aperto lo chiude soltanto (niente scheda)
+  contenitore.addEventListener("click", (ev) => {
+    if (pannello.hidden || pannello.contains(ev.target) || tasto.contains(ev.target)) return;
+    apri(false);
+    ev.stopPropagation();
+  }, true);
 }
 
 function titoloFiltro() {
@@ -532,6 +544,9 @@ function aggiornaGiorni() {
   document.querySelectorAll("#giorni button").forEach((b, i) => {
     b.setAttribute("aria-selected", i === stato.giorno ? "true" : "false");
   });
+  const iso = stato.punteggi.giorni[stato.giorno];
+  const d = daIso(iso);
+  document.getElementById("riassunto-giorno").textContent = `${etichettaGiorno(iso)} ${d.getDate()} ${MESI[d.getMonth()]}`;
 }
 
 /**
@@ -622,7 +637,9 @@ function segnaGiorniMigliori() {
 // ---------------------------------------------------------------------------
 
 function preparaMappa() {
-  mappa = L.map("mappa", { zoomControl: true }).setView([42.4, 12.6], 8);
+  // Sul telefono si ingrandisce con le dita: i tasti + e - servono solo sugli schermi grandi
+  const grande = window.matchMedia("(min-width: 760px)").matches;
+  mappa = L.map("mappa", { zoomControl: false }).setView([42.4, 12.6], 8);
 
   // Mappe di base: stradale (OpenStreetMap) o topografica con curve di livello
   // (OpenTopoMap); in più, a scelta, i sentieri escursionistici (Waymarked Trails).
@@ -660,7 +677,16 @@ function preparaMappa() {
     }).addTo(protette);
   });
   if (ricordato("protette") === "si") protette.addTo(mappa);
-  L.control.layers(basi, { "Sentieri": sentieri, "Aree protette": protette }, { position: "topleft" }).addTo(mappa);
+  // Canaloni e posti dal web: strati vuoti che accendono e spengono i loro disegni
+  const canaloni = L.layerGroup().on("add", accendiCanaloni).on("remove", spegniCanaloni);
+  const web = L.layerGroup().on("add", accendiWeb).on("remove", spegniWeb);
+  L.control.layers(basi, {
+    "Sentieri": sentieri,
+    "Aree protette": protette,
+    "<span style='color:#1d5aa6'>Canaloni</span> (dove resta l'umidità)": canaloni,
+    "<span style='color:#e0001b'>●</span> Posti citati sul web": web,
+  }, { position: "topright" }).addTo(mappa);
+  if (grande) L.control.zoom({ position: "topright" }).addTo(mappa);
   mappa.on("baselayerchange", (ev) => ricorda("mappa-base", ev.name));
   mappa.on("overlayadd", (ev) => {
     if (ev.layer === sentieri) ricorda("sentieri", "si");
@@ -951,8 +977,7 @@ function preparaSelezione() {
   try { JSON.parse(ricordato("selezione") || "[]").forEach((q) => stato.selezione.add(q)); } catch (e) { /* niente */ }
   disegnaSelezione();
 
-  document.getElementById("modo-mappa").addEventListener("click", () => impostaModalita(false));
-  document.getElementById("modo-seleziona").addEventListener("click", () => impostaModalita(true));
+  document.getElementById("modo-seleziona").addEventListener("click", () => impostaModalita(!stato.selezionando));
   document.getElementById("svuota-selezione").addEventListener("click", () => {
     stato.selezione.clear();
     salvaSelezione();
@@ -1077,14 +1102,13 @@ function disegnaSelezione() {
 /** Modalità Seleziona: la mappa smette di spostarsi col dito. */
 function impostaModalita(seleziona) {
   stato.selezionando = seleziona;
-  document.getElementById("modo-mappa").setAttribute("aria-pressed", String(!seleziona));
   document.getElementById("modo-seleziona").setAttribute("aria-pressed", String(seleziona));
   document.querySelector(".contenitore-mappa").classList.toggle("selezionando", seleziona);
   const comandi = [mappa.dragging, mappa.touchZoom, mappa.doubleClickZoom, mappa.boxZoom];
   comandi.forEach((c) => (seleziona ? c.disable() : c.enable()));
   mappa.closePopup();
   if (seleziona) {
-    messaggio("Tocca i quadrati o passaci sopra col dito. Se chiudi un anello, si riempie anche l'interno.", 6000);
+    messaggio("Tocca i quadrati o passaci sopra col dito. Se chiudi un anello, si riempie anche l'interno. Ritocca il pulsante per tornare a spostare la mappa.", 6000);
   }
 }
 
@@ -1092,14 +1116,13 @@ function impostaModalita(seleziona) {
 // Canaloni
 // ---------------------------------------------------------------------------
 
-async function alternaCanaloni() {
-  const bottone = document.getElementById("mostra-canaloni");
-  if (stato.canaloni) {
-    stato.canaloni.remove();
-    stato.canaloni = null;
-    bottone.setAttribute("aria-pressed", "false");
-    return;
-  }
+function spegniCanaloni() {
+  if (stato.canaloni) stato.canaloni.remove();
+  stato.canaloni = null;
+}
+
+async function accendiCanaloni() {
+  if (stato.canaloni) return;
   try {
     if (!stato.indiceCanaloni) stato.indiceCanaloni = await caricaJson("data/canaloni/indice.json");
   } catch (errore) {
@@ -1110,7 +1133,6 @@ async function alternaCanaloni() {
     Object.entries(stato.indiceCanaloni).map(([zona, limiti]) =>
       L.imageOverlay(`data/canaloni/${zona}.png`, limiti, { opacity: 0.55, interactive: false }))
   ).addTo(mappa);
-  bottone.setAttribute("aria-pressed", "true");
   if (mappa.getZoom() < 12) messaggio("Ingrandisci la mappa per vedere bene i canaloni (in blu).");
 }
 
@@ -1855,14 +1877,14 @@ function mostraPreferiti() {
 
 let stratoWeb = null;
 
-function preparaWeb() {
-  const bottone = document.getElementById("mostra-web");
-  bottone.addEventListener("click", async () => {
-    if (stratoWeb) {
-      stratoWeb.remove(); stratoWeb = null;
-      bottone.setAttribute("aria-pressed", "false");
-      return;
-    }
+function spegniWeb() {
+  if (stratoWeb) stratoWeb.remove();
+  stratoWeb = null;
+}
+
+async function accendiWeb() {
+  if (stratoWeb) return;
+  {
     let dati;
     try { dati = await caricaJson("data/segnalati_web.json"); } catch (e) {
       messaggio("Non riesco a caricare i posti segnalati sul web.");
@@ -1880,14 +1902,13 @@ function preparaWeb() {
       stratoWeb.addLayer(segno);
     });
     stratoWeb.addTo(mappa);
-    bottone.setAttribute("aria-pressed", "true");
     // I testi presi da YouTube vanno riaggiornati almeno ogni 30 giorni
     if (dati.raccolta && (Date.now() - daIso(dati.raccolta)) / 86400000 > 30) {
       messaggio("Attenzione: i posti dal web sono stati raccolti più di un mese fa.", 5000);
       return;
     }
     messaggio(`${dati.posti.length} posti citati sul web. Toccane uno per le fonti.`, 4000);
-  });
+  }
 }
 
 function schedaWeb(p) {
