@@ -177,7 +177,7 @@ def get_reddit(percorso, **p):
             break
         time.sleep(attesa)
     log(f"  persa dopo tutti i tentativi: {p}")
-    return []
+    return None   # None, non lista vuota: la ricerca va rifatta al prossimo giro
 
 
 def raccogli_reddit():
@@ -187,9 +187,12 @@ def raccogli_reddit():
         for chiave in CHIAVI_REDDIT:
             if f"{sub}|{chiave}" in fatte:
                 continue
-            cursore = DA
+            cursore, persa = DA, False
             for _ in range(10):   # al massimo 1000 post per coppia
                 righe = get_reddit("posts/search", subreddit=sub, query=chiave, limit=100, after=cursore)
+                if righe is None:
+                    persa = True
+                    break
                 for r in righe:
                     if r.get("id") and r["id"] not in post:
                         post[r["id"]] = {"titolo": r.get("title", ""), "testo": r.get("selftext", ""),
@@ -199,7 +202,8 @@ def raccogli_reddit():
                     break
                 cursore = dt.datetime.utcfromtimestamp(max(r.get("created_utc", 0) for r in righe) + 1).isoformat()
                 time.sleep(PAUSA)
-            fatte.add(f"{sub}|{chiave}")
+            if not persa:   # le ricerche perse restano da fare
+                fatte.add(f"{sub}|{chiave}")
             scrivi("reddit_post.json", post)
             scrivi("reddit_ricerche_fatte.json", sorted(fatte))
             time.sleep(PAUSA)
@@ -209,6 +213,8 @@ def raccogli_reddit():
     da_fare = [pid for pid, p in post.items() if pid not in commenti and p["commenti"]]
     for n, pid in enumerate(da_fare, start=1):
         righe = get_reddit("comments/search", link_id=pid, limit=100)
+        if righe is None:   # riprova al prossimo giro
+            continue
         commenti[pid] = [{"testo": c.get("body", ""), "autore": c.get("author", ""),
                           "data": dt.datetime.utcfromtimestamp(c.get("created_utc", 0)).date().isoformat()}
                          for c in righe]

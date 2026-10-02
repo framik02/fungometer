@@ -39,7 +39,7 @@ sys.path.insert(0, str(RADICE))
 from fungometer.griglia import carica_aree  # noqa: E402
 
 CARTELLA = RADICE / "data" / "raw" / "web"
-MIN_FONTI = 2
+MIN_FONTI = 1
 DISTANZA_AMBIGUA_KM = 15
 
 # Specie e parole che indicano che si parla di funghi
@@ -64,7 +64,7 @@ RUMORE = re.compile(
     r"\bsagr[ae]\b|\bfest[ae] del fungo|\bfier[ae]\b|ricett|ingredient|\bcucin|salsicc|tagliatell|fettuccin"
     r"|fusilli|risott|primo piatto|\bchef\b|in padella|al forno|trifolat|monte i porcini|ristorant|degustazion"
     r"|lenticchi|\bdieta\b|prodotti tipici|\bmenu\b|\bpizz|bruschett"
-    r"|m(?:on)?\.?te\s*\"?\s*(?:i\s+)?porcini|fonte\s+porcini|mostra micologic|\bpranz|\bcen[ae]\b|#food|\bcibo\b|coltivat",
+    r"|m(?:on)?\.?te\s*\"?\s*(?:i\s+)?porcini|fonte\s+porcini|rifugio\s+porcini|mostra micologic|mostra del fung|mostra mercato|tartuf|\bolio\b|\bpranz|\bcen[ae]\b|#food|\bcibo\b|coltivat",
     re.I)
 
 # Nomi di posto che sono anche parole comuni o troppo generici
@@ -78,7 +78,7 @@ selva macchia cerreto faggeta castagneto pineta lecceta cava cave porta grotta g
                 "madonna del monte", "monte rotondo", "valle", "le case", "la torre", "il colle", "la valle",
                 "roma", "lazio", "umbria", "italia", "centro", "nord", "sud", "est", "ovest", "pace",
                 "vita", "fine", "bella", "belli", "buona", "gola", "piana", "palazzo", "giardino", "monti",
-                "appennino", "appennini", "appennino centrale",
+                "appennino", "appennini", "appennino centrale", "apennines", "meloni", "giano",
                 "piemonte", "lombardia", "veneto", "liguria", "toscana", "marche", "abruzzo", "molise",
                 "campania", "puglia", "calabria", "sicilia", "sardegna", "friuli", "trentino", "emilia",
                 "romagna", "basilicata", "valle d'aosta", "europa", "francia", "spagna", "germania"}
