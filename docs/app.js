@@ -1008,7 +1008,7 @@ function limitiDi(celle) {
 
 const ZOOM_DETTAGLIO = 10;       // da qui in su si vedono i quadrati da 500 m
 const ITALIA = [[35.5, 6.5], [47.1, 18.6]];
-const LARGHEZZA_PANORAMICA = 700; // pixel dell'immagine d'insieme (il browser la sfuma ancora ingrandendola)
+const LARGHEZZA_PANORAMICA = 600; // pixel dell'immagine d'insieme (il browser la sfuma ancora ingrandendola)
 
 /** Python arrotonda le metà al pari (round(2.5) = 2): lo facciamo anche qui. */
 function arrotondaPari(x) {
@@ -1123,6 +1123,8 @@ async function caricaItalia() {
       caricaJson("data/italia/indice.json"), caricaJson("data/italia/panoramica.json"),
     ]);
     stato.italia.indice = indice;
+    // Il disegno fisso del territorio: se manca, il quadro d'insieme usa solo i gruppi
+    try { stato.italia.habitat = await caricaJson("data/italia/habitat.json"); } catch (e) { stato.italia.habitat = null; }
     const S = stato.punteggi.specie.length, D = stato.punteggi.giorni.length;
     panoramica.p = daBase64(panoramica.p);
     panoramica.a = daBase64(panoramica.a);
@@ -1228,18 +1230,100 @@ const SIGMA_PANORAMICA_KM = 9;     // larghezza della campana
 const RAGGIO_PANORAMICA_KM = 22;   // oltre questa distanza un gruppo non conta
 const COPERTURA_PIENA = 0.9;       // somma dei pesi da cui il colore è pieno
 
+/*
+ * Con il disegno del territorio (data/italia/habitat.json) il quadro d'insieme
+ * è più definito: ogni cella da 3 km prende il meteo del suo gruppo da 15 km e
+ * lo moltiplica per quanto è adatto il suo quadrato migliore. Così i colori
+ * seguono boschi, crinali e valli, e pianure coltivate e città restano vuote.
+ *   punteggio della cella per una specie = punteggio del gruppo x idoneità della cella
+ *                                           / idoneità migliore del gruppo
+ * Poi le celle si sfumano su pochi chilometri, come i gruppi qui sopra.
+ */
+const SIGMA_CELLE_KM = 2.5;
+const RAGGIO_CELLE_KM = 5;
+const COPERTURA_CELLE = 1.0;
+
+function preparaCellePanoramica(pan) {
+  const hab = stato.italia.habitat;
+  const S = stato.punteggi.specie.length;
+  if (!hab || !pan.ids || hab.specie !== S) return false;
+  const gruppoDi = new Map(pan.ids.map((id, i) => [id, i]));
+  const lat = [], lon = [], gruppo = [], idoneita = [];
+  Object.entries(hab.riquadri).forEach(([codice, testo]) => {
+    const sud = Number(codice.slice(1, 5)) / 100, ovest = Number(codice.slice(6, 10)) / 100;
+    const righe = Math.round(0.5 * 111.32 / 3);
+    const colonne = Math.round(0.5 * 111.32 * Math.cos((sud + 0.25) * Math.PI / 180) / 3);
+    const byte = daBase64(testo);
+    for (let o = 0; o + 2 + S <= byte.length; o += 2 + S) {
+      const n = byte[o] | (byte[o + 1] << 8);
+      const r = Math.floor(n / colonne), c = n % colonne;
+      const g = gruppoDi.get(`${codice}_g${Math.floor(r / 5)}_${Math.floor(c / 5)}`);
+      if (g === undefined) continue;
+      lat.push(sud + (r + 0.5) * 0.5 / righe);
+      lon.push(ovest + (c + 0.5) * 0.5 / colonne);
+      gruppo.push(g);
+      for (let s = 0; s < S; s++) idoneita.push(byte[o + 2 + s]);
+    }
+  });
+  const nc = lat.length;
+  pan.celle = { n: nc, lat, lon, gruppo: Int32Array.from(gruppo), idoneita: Uint8Array.from(idoneita) };
+  // Idoneità migliore di ogni gruppo, specie per specie
+  pan.idoneitaGruppo = new Uint8Array(pan.gruppi.length * S);
+  for (let i = 0; i < nc; i++) {
+    for (let s = 0; s < S; s++) {
+      const j = pan.celle.gruppo[i] * S + s;
+      pan.idoneitaGruppo[j] = Math.max(pan.idoneitaGruppo[j], pan.celle.idoneita[i * S + s]);
+    }
+  }
+  // Il meteo non cambia a gradino al confine fra due gruppi: ogni cella prende
+  // la media dei gruppi vicini pesata a campana (come il quadro senza celle)
+  const centri = pan.gruppi.map(([s0, o, n, e]) => [(s0 + n) / 2, (o + e) / 2]);
+  const caselle = new Map();
+  centri.forEach(([la, lo], g) => {
+    const k = Math.floor(la / 0.2) * 10000 + Math.floor(lo / 0.2);
+    if (!caselle.has(k)) caselle.set(k, []);
+    caselle.get(k).push(g);
+  });
+  const inizio = new Uint32Array(nc + 1), indici = [], pesi = [];
+  for (let i = 0; i < nc; i++) {
+    const la = lat[i], lo = lon[i], kmLon = 111.32 * Math.cos(la * Math.PI / 180);
+    const r0 = Math.floor(la / 0.2), c0 = Math.floor(lo / 0.2);
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        for (const g of caselle.get((r0 + dr) * 10000 + c0 + dc) || []) {
+          const dy = (centri[g][0] - la) * 111.32, dx = (centri[g][1] - lo) * kmLon;
+          const d2 = dx * dx + dy * dy;
+          if (d2 > RAGGIO_PANORAMICA_KM ** 2) continue;
+          indici.push(g);
+          pesi.push(Math.exp(-d2 / SIGMA_PANORAMICA_KM ** 2));
+        }
+      }
+    }
+    inizio[i + 1] = indici.length;
+  }
+  pan.celle.meteo = { inizio, indici: Uint16Array.from(indici), pesi: Float32Array.from(pesi) };
+  return true;
+}
+
 function preparaPanoramica() {
   const pan = stato.italia.panoramica;
   if (!pan) return;
+  const conCelle = preparaCellePanoramica(pan);
   const [[sud, ovest], [nord, est]] = ITALIA;
   const W = LARGHEZZA_PANORAMICA;
   const scala = W / ((est - ovest) * Math.PI / 180);
   const H = Math.round((mercatore(nord) - mercatore(sud)) * scala);
 
-  // Centri dei gruppi in una griglia di caselle da 0,2 gradi, per trovare presto i vicini
-  const centri = pan.gruppi.map(([s, o, n, e]) => [(s + n) / 2, (o + e) / 2]);
+  // Centri delle celle (o dei gruppi) in una griglia di caselle, per trovare presto i vicini
+  const centri = conCelle
+    ? pan.celle.lat.map((la, i) => [la, pan.celle.lon[i]])
+    : pan.gruppi.map(([s, o, n, e]) => [(s + n) / 2, (o + e) / 2]);
+  const PASSO = conCelle ? 0.06 : 0.2;
+  const sigma = conCelle ? SIGMA_CELLE_KM : SIGMA_PANORAMICA_KM;
+  const raggio = conCelle ? RAGGIO_CELLE_KM : RAGGIO_PANORAMICA_KM;
+  pan.copertura = conCelle ? COPERTURA_CELLE : COPERTURA_PIENA;
   const caselle = new Map();
-  const casella = (lat, lon) => Math.floor(lat / 0.2) * 1000 + Math.floor(lon / 0.2);
+  const casella = (lat, lon) => Math.floor(lat / PASSO) * 10000 + Math.floor(lon / PASSO);
   centri.forEach(([lat, lon], i) => {
     const c = casella(lat, lon);
     if (!caselle.has(c)) caselle.set(c, []);
@@ -1249,22 +1333,22 @@ function preparaPanoramica() {
   // Per ogni pixel: i gruppi entro il raggio e il loro peso (in forma compatta)
   const inizio = new Uint32Array(W * H + 1);
   const indici = [], pesi = [];
-  const dueSigma2 = SIGMA_PANORAMICA_KM ** 2;
+  const dueSigma2 = sigma ** 2;
   for (let y = 0; y < H; y++) {
     const m = mercatore(nord) - (y + 0.5) / scala;
     const lat = (2 * Math.atan(Math.exp(m)) - Math.PI / 2) * 180 / Math.PI;
     const kmLon = 111.32 * Math.cos(lat * Math.PI / 180);
     for (let x = 0; x < W; x++) {
       const lon = ovest + (x + 0.5) / scala * 180 / Math.PI;
-      const r0 = Math.floor(lat / 0.2), c0 = Math.floor(lon / 0.2);
+      const r0 = Math.floor(lat / PASSO), c0 = Math.floor(lon / PASSO);
       for (let dr = -1; dr <= 1; dr++) {
         for (let dc = -1; dc <= 1; dc++) {
-          const elenco = caselle.get((r0 + dr) * 1000 + c0 + dc);
+          const elenco = caselle.get((r0 + dr) * 10000 + c0 + dc);
           if (!elenco) continue;
           for (const i of elenco) {
             const dy = (centri[i][0] - lat) * 111.32, dx = (centri[i][1] - lon) * kmLon;
             const d2 = dx * dx + dy * dy;
-            if (d2 > RAGGIO_PANORAMICA_KM ** 2) continue;
+            if (d2 > raggio * raggio) continue;
             indici.push(i);
             pesi.push(Math.exp(-d2 / dueSigma2));
           }
@@ -1274,7 +1358,7 @@ function preparaPanoramica() {
     }
   }
   pan.inizio = inizio;
-  pan.indici = Uint16Array.from(indici);
+  pan.indici = Uint32Array.from(indici);
   pan.pesi = Float32Array.from(pesi);
   pan.W = W; pan.H = H;
   pan.tela = document.createElement("canvas");
@@ -1297,8 +1381,7 @@ function punteggioGruppo(i, giorno = stato.giorno) {
 function dipingiPanoramica() {
   const pan = stato.italia.panoramica;
   if (!pan) return;
-  const valori = new Float32Array(pan.gruppi.length);
-  for (let i = 0; i < valori.length; i++) valori[i] = punteggioGruppo(i);
+  const valori = pan.celle ? valoriCelle(pan) : new Float32Array(pan.gruppi.length).map((_, i) => punteggioGruppo(i));
   const ctx = pan.tela.getContext("2d");
   const img = ctx.createImageData(pan.W, pan.H);
   const { inizio, indici, pesi } = pan;
@@ -1310,7 +1393,7 @@ function dipingiPanoramica() {
     const colore4 = TAVOLOZZA[Math.round(somma / peso)];
     const o = p * 4;
     img.data[o] = colore4[0]; img.data[o + 1] = colore4[1]; img.data[o + 2] = colore4[2];
-    img.data[o + 3] = Math.round(colore4[3] * Math.min(1, peso / COPERTURA_PIENA));
+    img.data[o + 3] = Math.round(colore4[3] * Math.min(1, peso / pan.copertura));
   }
   ctx.putImageData(img, 0, 0);
   pan.tela.toBlob((blob) => {
@@ -1319,6 +1402,40 @@ function dipingiPanoramica() {
     pan.url = URL.createObjectURL(blob);
     pan.immagine.setUrl(pan.url);
   });
+}
+
+/** Punteggio di ogni cella del quadro d'insieme per le specie e il giorno scelti. */
+function valoriCelle(pan) {
+  const S = stato.punteggi.specie.length, D = stato.punteggi.giorni.length, g0 = stato.giorno;
+  const { n, idoneita } = pan.celle;
+  const { inizio, indici, pesi } = pan.celle.meteo;
+  const valori = new Float32Array(n);
+  const meteo = new Float32Array(S), pesoMeteo = new Float32Array(S);
+  for (let i = 0; i < n; i++) {
+    // Acqua e "meteo per unità di idoneità" di ogni specie, sfumati sui gruppi vicini
+    let acqua = 0, pesoAcqua = 0;
+    meteo.fill(0); pesoMeteo.fill(0);
+    for (let j = inizio[i]; j < inizio[i + 1]; j++) {
+      const g = indici[j], w = pesi[j], base = g * S * D + g0;
+      let a = 0;
+      for (const s of stato.scelte) {
+        a = Math.max(a, pan.a[base + s * D]);
+        const migliore = pan.idoneitaGruppo[g * S + s];
+        if (migliore) { meteo[s] += w * pan.p[base + s * D] / migliore; pesoMeteo[s] += w; }
+      }
+      acqua += w * a; pesoAcqua += w;
+    }
+    acqua = pesoAcqua ? acqua / pesoAcqua / 100 : 0;
+    if (acqua <= 0) continue;
+    let nessuna = 1;
+    for (const s of stato.scelte) {
+      if (!pesoMeteo[s]) continue;
+      const p = meteo[s] / pesoMeteo[s] * idoneita[i * S + s];
+      nessuna *= 1 - Math.min(1, p / 100 / acqua);
+    }
+    valori[i] = 100 * acqua * (1 - nessuna);
+  }
+  return valori;
 }
 
 /** Gruppi del quadro d'insieme che si vedono sullo schermo. */

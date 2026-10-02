@@ -127,6 +127,21 @@ def aggiorna_italia(config, date_meteo_vecchie, giorni, dati_esistenti, celle_es
             json.dumps(contenuto, separators=(",", ":")), encoding="utf-8")
 
     # 2. panoramica: il quadrato migliore di ogni gruppo, specie per specie
+    costruisci_panoramica(config, giorni, dati_esistenti, celle_esistenti, statiche_esistenti)
+    return len(gruppi)
+
+
+def costruisci_panoramica(config, giorni, dati_esistenti, celle_esistenti, statiche_esistenti):
+    """Il quadro d'insieme, dai file meteo/<riquadro>.json già scritti.
+
+    Usa gli stessi numeri arrotondati che legge l'app: così da lontano e da
+    vicino i conti tornano. Si può rifare senza riscaricare il meteo.
+    """
+    comune, specie = config["comune"], config["specie"]
+    codici = list(specie)
+    effetto = comune["terreno"]["effetto_se_bagnato"]
+    date_giorni = [date.fromisoformat(g) for g in giorni]
+    per_riquadro = {f.stem: json.loads(f.read_text(encoding="utf-8")) for f in sorted((CARTELLA / "meteo").glob("*.json"))}
     migliori, acqua, confini, nomi = {}, {}, {}, {}
     n_s, n_g = len(codici), len(giorni)
 
@@ -143,7 +158,8 @@ def aggiorna_italia(config, date_meteo_vecchie, giorni, dati_esistenti, celle_es
     for riquadro in sorted(per_riquadro):
         dati = json.loads((CARTELLA / f"{riquadro}.json").read_text(encoding="utf-8"))
         for cella in dati["celle"]:
-            righe, voce = riassunti[cella["gruppo"]]
+            voce = per_riquadro[riquadro][cella["gruppo"]]
+            righe = [{k: voce[k][d] for k in ("p", "u", "k", "tr", "c")} for d in range(len(giorni))]
             fa, ft, fs = np.zeros((n_s, n_g)), np.zeros((n_s, n_g)), np.zeros((n_s, n_g))
             for s, cod in enumerate(codici):
                 for d, (r, giorno) in enumerate(zip(righe, date_giorni)):
@@ -169,6 +185,7 @@ def aggiorna_italia(config, date_meteo_vecchie, giorni, dati_esistenti, celle_es
     p = np.stack([migliori[g] for g in ordine]).round().clip(0, 100).astype(np.uint8)
     a = (np.stack([acqua[g] for g in ordine]) * 100).round().clip(0, 100).astype(np.uint8)
     panoramica = {
+        "ids": ordine,
         "gruppi": [confini[g] for g in ordine],
         # Il comune (o la zona) che compare più spesso fra le celle del gruppo
         "nomi": [nomi[g].most_common(1)[0][0] for g in ordine],
@@ -178,7 +195,6 @@ def aggiorna_italia(config, date_meteo_vecchie, giorni, dati_esistenti, celle_es
     (CARTELLA / "panoramica.json").write_text(json.dumps(panoramica, separators=(",", ":")), encoding="utf-8")
     kb = (CARTELLA / "panoramica.json").stat().st_size / 1024
     print(f"Scritti il meteo di {len(per_riquadro)} riquadri e la panoramica ({len(ordine)} gruppi, {kb:.0f} KB)")
-    return len(gruppi)
 
 
 def _centro(bbox):

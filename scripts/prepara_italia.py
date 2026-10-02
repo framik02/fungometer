@@ -284,14 +284,79 @@ def scrivi_indici(config):
     print(f"Riquadri con celle: {len(indice)}, celle: {n_celle}, gruppi meteo: {len(gruppi)}")
 
 
+def scrivi_habitat():
+    """docs/data/italia/habitat.json: per ogni cella da 3 km e ogni specie, quanto è
+    adatto il suo quadrato migliore (habitat x quota x terreno, da 0 a 100).
+
+    Non cambia di giorno in giorno: l'app lo scarica una volta e lo usa per dare
+    al quadro d'insieme la forma dei boschi (il colore del meteo da 15 km si
+    moltiplica per questo valore). Comprende anche le celle di Foligno e Roma,
+    rimesse sulla griglia d'Italia.
+
+    Formato: {"specie": S, "riquadri": {riquadro: base64 di record da 2 + S byte}},
+    dove ogni record è il numero della cella nel riquadro (riga x colonne +
+    colonna, due byte little-endian) seguito da S valori.
+    """
+    import math
+    from fungometer.italia import OVEST, SUD, codice_riquadro, passi_riquadro
+    per_riquadro = {}
+
+    def metti(codice, numero, valori):
+        voce = per_riquadro.setdefault(codice, {})
+        voce[numero] = np.maximum(voce.get(numero, valori), valori)
+
+    def migliori(byte, S):
+        st = np.frombuffer(byte, dtype=np.uint8).reshape(36, S + 1).astype(float)
+        validi = st[:, 0] != 255
+        if not validi.any():
+            return np.zeros(S, dtype=np.uint8)
+        st = st[validi]
+        return np.round((st[:, :S] * st[:, S:S + 1] / 100).max(axis=0)).astype(np.uint8)
+
+    S = None
+    for percorso in sorted(CARTELLA_APP.glob("i[0-9]*n[0-9]*.json")):
+        dati = json.loads(percorso.read_text(encoding="utf-8"))
+        codice = percorso.stem
+        _, colonne = passi_riquadro(int(codice[1:5]) / 100)
+        for cella in dati["celle"]:
+            byte = base64.b64decode(dati["statiche"][cella["id"]])
+            S = len(byte) // 36 - 1
+            r, c = map(int, cella["id"].split("_")[1:])
+            metti(codice, r * colonne + c, migliori(byte, S))
+
+    # Foligno e Roma, rimesse nella cella d'Italia che contiene il loro centro
+    statiche = json.loads((RADICE / "docs" / "data" / "statiche.json").read_text(encoding="utf-8"))
+    for cella in json.loads((RADICE / "data" / "celle.json").read_text(encoding="utf-8")):
+        lat, lon = cella["lat"], cella["lon"]
+        sud = round(SUD + math.floor((lat - SUD) / LATO_RIQUADRO) * LATO_RIQUADRO, 4)
+        ovest = round(OVEST + math.floor((lon - OVEST) / LATO_RIQUADRO) * LATO_RIQUADRO, 4)
+        righe, colonne = passi_riquadro(sud)
+        r = int((lat - sud) / (LATO_RIQUADRO / righe))
+        c = int((lon - ovest) / (LATO_RIQUADRO / colonne))
+        metti(codice_riquadro(sud, ovest), r * colonne + c, migliori(bytes(statiche[cella["id"]]), S))
+
+    uscita = {"specie": S, "riquadri": {}}
+    for codice, celle in sorted(per_riquadro.items()):
+        record = b"".join(int(n).to_bytes(2, "little") + v.tobytes() for n, v in sorted(celle.items()))
+        uscita["riquadri"][codice] = base64.b64encode(record).decode("ascii")
+    percorso = CARTELLA_APP / "habitat.json"
+    percorso.write_text(json.dumps(uscita, separators=(",", ":")), encoding="utf-8")
+    n = sum(len(c) for c in per_riquadro.values())
+    print(f"Scritto {percorso.relative_to(RADICE)}: {n} celle ({percorso.stat().st_size / 1024:.0f} KB)")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Dati fissi di tutta Italia")
     parser.add_argument("riquadri", nargs="*", help="solo questi riquadri (es. i4250n1200)")
     parser.add_argument("--pubblica", action="store_true", help="rifà solo i file dell'app")
+    parser.add_argument("--habitat", action="store_true", help="rifà solo habitat.json")
     args = parser.parse_args()
 
     config = carica_specie(RADICE / "config" / "specie.yaml")
     CARTELLA_INTERMEDI.mkdir(parents=True, exist_ok=True)
+    if args.habitat:
+        scrivi_habitat()
+        return
     elenco = [r for r in riquadri() if not args.riquadri or r[0] in args.riquadri]
 
     if not args.pubblica:
@@ -316,6 +381,7 @@ def main():
                 if dati["celle"]:
                     pubblica_riquadro(codice, dati, config)
     scrivi_indici(config)
+    scrivi_habitat()
 
 
 if __name__ == "__main__":
