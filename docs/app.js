@@ -405,6 +405,7 @@ async function avvia() {
   preparaPreferiti();
   preparaRicerca();
   preparaPannelloFiltri();
+  preparaStrumenti();
 
   // Prima inquadratura: l'ultima area scelta, altrimenti tutte e due
   const area = ricordato("area");
@@ -637,8 +638,6 @@ function segnaGiorniMigliori() {
 // ---------------------------------------------------------------------------
 
 function preparaMappa() {
-  // Sul telefono si ingrandisce con le dita: i tasti + e - servono solo sugli schermi grandi
-  const grande = window.matchMedia("(min-width: 760px)").matches;
   mappa = L.map("mappa", { zoomControl: false }).setView([42.4, 12.6], 8);
 
   // Mappe di base: stradale (OpenStreetMap) o topografica con curve di livello
@@ -677,16 +676,9 @@ function preparaMappa() {
     }).addTo(protette);
   });
   if (ricordato("protette") === "si") protette.addTo(mappa);
-  // Canaloni e posti dal web: strati vuoti che accendono e spengono i loro disegni
-  const canaloni = L.layerGroup().on("add", accendiCanaloni).on("remove", spegniCanaloni);
-  const web = L.layerGroup().on("add", accendiWeb).on("remove", spegniWeb);
-  L.control.layers(basi, {
-    "Sentieri": sentieri,
-    "Aree protette": protette,
-    "<span style='color:#1d5aa6'>Canaloni</span> (dove resta l'umidità)": canaloni,
-    "<span style='color:#e0001b'>●</span> Posti citati sul web": web,
-  }, { position: "topright" }).addTo(mappa);
-  if (grande) L.control.zoom({ position: "topright" }).addTo(mappa);
+  // Il menu delle mappe si apre dal pulsante "Mappe" (il suo tasto di Leaflet è nascosto)
+  stato.menuMappe = L.control.layers(basi, { "Sentieri": sentieri, "Aree protette": protette },
+    { position: "topright" }).addTo(mappa);
   mappa.on("baselayerchange", (ev) => ricorda("mappa-base", ev.name));
   mappa.on("overlayadd", (ev) => {
     if (ev.layer === sentieri) ricorda("sentieri", "si");
@@ -1110,6 +1102,36 @@ function impostaModalita(seleziona) {
   if (seleziona) {
     messaggio("Tocca i quadrati o passaci sopra col dito. Se chiudi un anello, si riempie anche l'interno. Ritocca il pulsante per tornare a spostare la mappa.", 6000);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pulsanti sulla mappa: mappe, canaloni, dal web, zoom
+// ---------------------------------------------------------------------------
+
+function preparaStrumenti() {
+  const mappe = document.getElementById("apri-strati");
+  mappe.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const menu = stato.menuMappe;
+    const aperto = menu.getContainer().classList.contains("leaflet-control-layers-expanded");
+    if (aperto) menu.collapse(); else menu.expand();
+    mappe.setAttribute("aria-expanded", String(!aperto));
+  });
+  mappa.on("click", () => mappe.setAttribute("aria-expanded", "false"));
+
+  // Canaloni e posti dal web: il pulsante si accende quando lo strato è sulla mappa
+  const interruttore = (id, attivo, accendi, spegni) => {
+    const b = document.getElementById(id);
+    b.addEventListener("click", async () => {
+      if (attivo()) spegni(); else await accendi();
+      b.setAttribute("aria-pressed", String(attivo()));
+    });
+  };
+  interruttore("mostra-canaloni", () => !!stato.canaloni, accendiCanaloni, spegniCanaloni);
+  interruttore("mostra-web", () => !!stratoWeb, accendiWeb, spegniWeb);
+
+  document.getElementById("zoom-piu").addEventListener("click", () => mappa.zoomIn());
+  document.getElementById("zoom-meno").addEventListener("click", () => mappa.zoomOut());
 }
 
 // ---------------------------------------------------------------------------

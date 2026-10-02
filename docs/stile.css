@@ -129,7 +129,7 @@ button, select { font: inherit; color: inherit; }
 .bottone-filtri {
   position: absolute; z-index: 990; left: 10px; top: 10px;
   display: flex; align-items: center; gap: 6px;
-  max-width: calc(100% - 76px); padding: 7px 12px;
+  max-width: calc(100% - 92px); padding: 9px 14px;
   border: none; border-radius: 999px; background: var(--superficie); box-shadow: var(--ombra);
   font-size: 0.9rem; cursor: pointer; text-align: left;
 }
@@ -213,8 +213,8 @@ button, select { font: inherit; color: inherit; }
   left: 12px;
   bottom: 24px;
   z-index: 800;
-  width: min(150px, 40vw);
-  padding: 4px 8px;
+  width: min(190px, 48vw);
+  padding: 5px 9px;
   border-radius: var(--raggio);
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--ombra);
@@ -253,10 +253,6 @@ button, select { font: inherit; color: inherit; }
 
 /* Quando la scheda è aperta, via ciò che la coprirebbe */
 .scheda-aperta .legenda,
-.scheda-aperta .bottone-posizione,
-.scheda-aperta .bottone-canaloni,
-.scheda-aperta .modalita,
-.scheda-aperta .bottone-migliori,
 .scheda-aperta .vicini,
 .scheda-aperta .pannello-migliori,
 .scheda-aperta .leaflet-control-zoom { display: none; }
@@ -361,31 +357,60 @@ button, select { font: inherit; color: inherit; }
 /* Da vicino ogni pixel resta un quadrato netto */
 .quadrati-netti .leaflet-image-layer.quadrati { image-rendering: pixelated; image-rendering: crisp-edges; }
 
-/* --- Pulsanti tondi sulla mappa ---------------------------------------- */
+/* --- Pulsanti sulla mappa ------------------------------------------- */
 
-.bottone-tondo {
-  display: grid; place-items: center; width: 44px; height: 44px; padding: 0;
-  border: none; border-radius: 50%; background: var(--superficie); color: var(--bosco);
-  box-shadow: var(--ombra); cursor: pointer;
+/* Una colonna in alto a destra e una in basso: schede bianche con icona e scritta */
+.colonna-strumenti {
+  position: absolute; z-index: 800; right: 10px; top: 10px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
 }
-.bottone-tondo[aria-pressed="true"] { background: var(--bosco); color: #fff; }
+.barra-strumenti {
+  display: flex; flex-direction: column; width: 62px;
+  border-radius: 16px; background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 1px 2px rgba(43, 38, 32, 0.12), 0 4px 14px rgba(43, 38, 32, 0.16);
+  overflow: hidden;
+}
+.barra-bassa { position: absolute; z-index: 800; right: 10px; bottom: 28px; }
+.strumento {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  width: 100%; padding: 8px 2px 6px; border: none; background: transparent;
+  color: var(--bosco); cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.strumento + .strumento, .zoom + .strumento { border-top: 1px solid #eee7dc; }
+.strumento span { font-size: 0.64rem; font-weight: 600; line-height: 1.1; letter-spacing: 0.01em; color: var(--testo-tenue); text-align: center; }
+.strumento:hover { background: #f6f2ea; }
+.strumento:focus-visible, .zoom button:focus-visible { outline: 2px solid var(--bosco); outline-offset: -3px; }
+/* Acceso: sfondo tenue del suo colore e scritta in tinta */
+.strumento[aria-pressed="true"], .strumento[aria-expanded="true"] { background: var(--bosco-chiaro); }
+.strumento[aria-pressed="true"] span, .strumento[aria-expanded="true"] span { color: var(--bosco); }
+.strumento-canaloni { color: #1d5aa6; }
+.strumento-canaloni[aria-pressed="true"] { background: #e3edf9; }
+.strumento-canaloni[aria-pressed="true"] span { color: #1d5aa6; }
+.strumento-web { color: #e0001b; }
+.strumento-web[aria-pressed="true"] { background: #fde6e8; }
+.strumento-web[aria-pressed="true"] span { color: #c00018; }
+.strumento-migliori { color: #9a5b00; }
+.strumento-migliori[aria-pressed="true"] { background: #fbefd9; }
+.strumento-migliori[aria-pressed="true"] span { color: #9a5b00; }
 
-.modalita {
-  position: absolute; z-index: 800; right: 10px; top: 62px;
-  display: flex; align-items: center; gap: 6px;
+.zoom { display: flex; flex-direction: column; }
+.zoom button {
+  height: 38px; border: none; background: transparent; color: var(--testo);
+  font-size: 1.35rem; line-height: 1; cursor: pointer;
 }
-.modalita .svuota {
+.zoom button + button { border-top: 1px solid #eee7dc; }
+.zoom button:hover { background: #f6f2ea; }
+
+.svuota {
   padding: 7px 12px; border: none; border-radius: 999px; background: var(--superficie);
-  color: #a33; font-weight: 600; font-size: 0.85rem; box-shadow: var(--ombra); cursor: pointer;
+  color: #a33; font-weight: 600; font-size: 0.8rem; box-shadow: var(--ombra); cursor: pointer;
 }
-.modalita .svuota[hidden] { display: none; }
+.svuota[hidden] { display: none; }
 
-.pulsanti-mappa {
-  position: absolute; z-index: 800; right: 10px; bottom: 28px;
-  display: flex; flex-direction: column; gap: 10px;
-}
-#migliori-qui { color: #9a5b00; }
-#migliori-qui[aria-pressed="true"] { background: #9a5b00; color: #fff; }
+/* Il menu delle mappe di Leaflet si apre accanto alla colonna, senza il suo tasto */
+.leaflet-top.leaflet-right .leaflet-control-layers { margin-right: 80px; border: none; border-radius: 14px; box-shadow: var(--ombra); }
+.leaflet-control-layers:not(.leaflet-control-layers-expanded) { display: none; }
+.leaflet-control-layers-expanded { padding: 8px 12px; font-size: 0.9rem; }
 
 /* In modalità Seleziona il dito disegna invece di spostare la mappa */
 .selezionando #mappa { cursor: crosshair; touch-action: none; }
@@ -495,12 +520,12 @@ button, select { font: inherit; color: inherit; }
 .segnaposto.attivo { width: 28px; height: 28px; background: #9a5b00; }
 
 /* Con un pannello in basso aperto, legenda e pulsanti in basso si tolgono di mezzo */
-.vicini-aperti .legenda, .vicini-aperti .pulsanti-mappa,
+.vicini-aperti .legenda, .vicini-aperti .barra-bassa,
 .contenitore-mappa:has(.pannello-migliori:not([hidden])) .legenda,
-.contenitore-mappa:has(.pannello-migliori:not([hidden])) .pulsanti-mappa { display: none; }
+.contenitore-mappa:has(.pannello-migliori:not([hidden])) .barra-bassa { display: none; }
 
 /* Con una scheda aperta resta solo la mappa */
-.scheda-aperta .legenda, .scheda-aperta .pulsanti-mappa, .scheda-aperta .modalita,
+.scheda-aperta .legenda, .scheda-aperta .barra-bassa, .scheda-aperta .colonna-strumenti,
 .scheda-aperta .bottone-filtri, .scheda-aperta .filtri { display: none; }
 
 /* Attribuzioni compatte: non devono coprire legenda e pulsanti */
