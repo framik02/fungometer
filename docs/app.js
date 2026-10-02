@@ -1881,6 +1881,11 @@ function preparaWeb() {
     });
     stratoWeb.addTo(mappa);
     bottone.setAttribute("aria-pressed", "true");
+    // I testi presi da YouTube vanno riaggiornati almeno ogni 30 giorni
+    if (dati.raccolta && (Date.now() - daIso(dati.raccolta)) / 86400000 > 30) {
+      messaggio("Attenzione: i posti dal web sono stati raccolti più di un mese fa.", 5000);
+      return;
+    }
     messaggio(`${dati.posti.length} posti citati sul web. Toccane uno per le fonti.`, 4000);
   });
 }
@@ -1894,6 +1899,9 @@ function schedaWeb(p) {
       <div class="zona">${p.tipo === "zona" ? "Zona ampia" : "Posto"} citato da ${p.fonti} fonti (${fonti})</div>
       ${specie.length ? `<p>Specie nominate: ${specie.map(testoSicuro).join(", ")}</p>` : ""}
       <p>Ultima citazione: ${testoSicuro(p.ultima)}</p>
+      ${(p.estratti || []).map((e) => `<blockquote class="estratto-web">“${testoSicuro(e.testo)}”
+        <span>${e.piattaforma === "youtube" ? "YouTube" : "Reddit"}, ${testoSicuro(e.data)} ·
+        <a href="${encodeURI(e.url)}" target="_blank" rel="noopener">fonte</a></span></blockquote>`).join("")}
       <ul class="fonti-web">${link}</ul>
       <p class="avviso-web">Trovato nei commenti pubblici che parlano di funghi. Una citazione non garantisce niente: può essere vecchia, sbagliata o negativa. Rispetta proprietà private e regole delle aree protette.</p>
     </div>`;
