@@ -403,6 +403,7 @@ async function avvia() {
   preparaVicini();
   preparaMiglioriQui();
   preparaPreferiti();
+  preparaWeb();
   preparaRicerca();
 
   // Prima inquadratura: l'ultima area scelta, altrimenti tutte e due
@@ -678,7 +679,10 @@ function preparaMappa() {
   // Con una scheda aperta nascondiamo legenda e pulsanti: sui telefoni
   // piccoli coprirebbero la scheda.
   const contenitore = document.querySelector(".contenitore-mappa");
-  mappa.on("popupopen", () => contenitore.classList.add("scheda-aperta"));
+  mappa.on("popupopen", () => {
+    contenitore.classList.add("scheda-aperta");
+    document.getElementById("messaggio").hidden = true;   // il messaggio non deve coprire la scheda
+  });
   mappa.on("popupclose", () => {
     contenitore.classList.remove("scheda-aperta");
     if (stato.evidenziato) { stato.evidenziato.remove(); stato.evidenziato = null; }
@@ -1843,6 +1847,56 @@ function mostraPreferiti() {
     preferiti.splice(Number(b.dataset.togli), 1);
     salvaPreferiti();
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Posti segnalati sul web (commenti pubblici di YouTube e Reddit)
+// ---------------------------------------------------------------------------
+
+let stratoWeb = null;
+
+function preparaWeb() {
+  const bottone = document.getElementById("mostra-web");
+  bottone.addEventListener("click", async () => {
+    if (stratoWeb) {
+      stratoWeb.remove(); stratoWeb = null;
+      bottone.setAttribute("aria-pressed", "false");
+      return;
+    }
+    let dati;
+    try { dati = await caricaJson("data/segnalati_web.json"); } catch (e) {
+      messaggio("Non riesco a caricare i posti segnalati sul web.");
+      return;
+    }
+    stratoWeb = L.layerGroup();
+    dati.posti.forEach((p) => {
+      const forza = Math.sqrt(p.fonti);
+      const opzioni = { color: "#e0001b", fillColor: "#ff1a33", weight: 2 };
+      // Zone ampie: alone largo e trasparente; posti precisi: cerchio pieno
+      const segno = p.tipo === "zona"
+        ? L.circle([p.lat, p.lon], { ...opzioni, radius: 1500 + 700 * forza, fillOpacity: 0.12, dashArray: "4 4" })
+        : L.circleMarker([p.lat, p.lon], { ...opzioni, radius: 5 + 3 * forza, fillOpacity: 0.85, color: "#fff" });
+      segno.bindPopup(() => schedaWeb(p), { maxWidth: 280 });
+      stratoWeb.addLayer(segno);
+    });
+    stratoWeb.addTo(mappa);
+    bottone.setAttribute("aria-pressed", "true");
+    messaggio(`${dati.posti.length} posti citati sul web. Toccane uno per le fonti.`, 4000);
+  });
+}
+
+function schedaWeb(p) {
+  const specie = Object.keys(p.specie || {});
+  const link = p.link.map((l) => `<li><a href="${encodeURI(l.url)}" target="_blank" rel="noopener">${l.piattaforma === "youtube" ? "Video YouTube" : "Discussione Reddit"}</a> del ${testoSicuro(l.data)}</li>`).join("");
+  const fonti = [p.youtube ? `${p.youtube} su YouTube` : "", p.reddit ? `${p.reddit} su Reddit` : ""].filter(Boolean).join(", ");
+  return `<div class="scheda scheda-web">
+      <h3>${testoSicuro(p.nome)}</h3>
+      <div class="zona">${p.tipo === "zona" ? "Zona ampia" : "Posto"} citato da ${p.fonti} fonti (${fonti})</div>
+      ${specie.length ? `<p>Specie nominate: ${specie.map(testoSicuro).join(", ")}</p>` : ""}
+      <p>Ultima citazione: ${testoSicuro(p.ultima)}</p>
+      <ul class="fonti-web">${link}</ul>
+      <p class="avviso-web">Trovato nei commenti pubblici che parlano di funghi. Una citazione non garantisce niente: può essere vecchia, sbagliata o negativa. Rispetta proprietà private e regole delle aree protette.</p>
+    </div>`;
 }
 
 // ---------------------------------------------------------------------------

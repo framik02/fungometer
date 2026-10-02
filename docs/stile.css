@@ -500,6 +500,28 @@ button, select { font: inherit; color: inherit; }
 
 /* --- Migliori qui ------------------------------------------------------ */
 
+.bottone-web {
+  position: absolute;
+  right: 12px;
+  bottom: 226px;
+  z-index: 800;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--superficie);
+  color: #e0001b;
+  box-shadow: var(--ombra);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.bottone-web[aria-pressed="true"] { background: #e0001b; color: #fff; }
+.scheda-aperta .bottone-web { display: none; }
+.vicini-aperti .bottone-web { bottom: 346px; }
+@media (max-height: 720px) { .vicini-aperti .bottone-web { display: none; } }
+.scheda-web .fonti-web { margin: 6px 0 0; padding-left: 18px; font-size: 0.8rem; }
+.scheda-web .avviso-web { margin-top: 8px; font-size: 0.75rem; color: var(--testo-tenue); }
+
 .bottone-migliori {
   position: absolute;
   right: 12px;
@@ -603,7 +625,29 @@ button, select { font: inherit; color: inherit; }
 .vicini-aperti .legenda { display: none; }
 .vicini-aperti .bottone-posizione { bottom: 190px; }
 .vicini-aperti .bottone-canaloni { bottom: 242px; }
-.vicini-aperti .bottone-migliori { bottom: 294px; }
+.vicini-aperti .bottone-web {
+  position: absolute;
+  right: 12px;
+  bottom: 226px;
+  z-index: 800;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--superficie);
+  color: #e0001b;
+  box-shadow: var(--ombra);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.bottone-web[aria-pressed="true"] { background: #e0001b; color: #fff; }
+.scheda-aperta .bottone-web { display: none; }
+.vicini-aperti .bottone-web { bottom: 346px; }
+@media (max-height: 720px) { .vicini-aperti .bottone-web { display: none; } }
+.scheda-web .fonti-web { margin: 6px 0 0; padding-left: 18px; font-size: 0.8rem; }
+.scheda-web .avviso-web { margin-top: 8px; font-size: 0.75rem; color: var(--testo-tenue); }
+
+.bottone-migliori { bottom: 294px; }
 
 /* Schermi bassi: con i posti vicini aperti non c'è spazio per tutti i pulsanti */
 @media (max-height: 720px) {
