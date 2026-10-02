@@ -47,7 +47,9 @@ const stato = {
 };
 
 const N = 6;                 // quadrati da 500 m per lato di una cella da 3 km
-const DATI_PER_QUADRATO = 6; // in statiche.json: habitat x quota per 5 specie, poi terreno
+// In statiche.json, per ogni quadrato: habitat x quota per ogni specie, poi il terreno.
+// Il numero dipende da quante specie ci sono: si fissa quando arrivano i dati.
+let DATI_PER_QUADRATO = 6;
 const VUOTO = 255;           // in statiche.json: quadrato d'acqua, senza dati
 const ZOOM_NETTO = 13;       // da qui in su i quadrati si vedono netti
 const ZOOM_MASSIMI = 12;     // sotto questo ogni pixel prende il migliore dei vicini
@@ -321,7 +323,7 @@ function punteggioSpecie(cella, k, specie, giorno) {
   const stagione = (voce.fs ? voce.fs[giorno] : stato.punteggi.specie[specie].stagione[giorno]) / 100;
   const habitatQuota = dati[base + specie] / 100;
   const effetto = stato.punteggi.regole.effetto_se_bagnato;
-  const terreno = 1 - (1 - dati[base + 5] / 100) * (1 - effetto * acqua);
+  const terreno = 1 - (1 - dati[base + DATI_PER_QUADRATO - 1] / 100) * (1 - effetto * acqua);
   return 100 * acqua * temperatura * stagione * habitatQuota * terreno;
 }
 
@@ -377,6 +379,12 @@ async function avvia() {
     stato.celle = celle;
     stato.punteggi = punteggi;
     stato.statiche = statiche;
+    // I punteggi delle celle stanno in un file per area (punteggi_foligno.json, ...)
+    if (punteggi.aree) {
+      const parti = await Promise.all(punteggi.aree.map((a) => caricaJson(`data/punteggi_${a}.json`)));
+      parti.forEach((parte) => Object.assign(punteggi.celle, parte.celle));
+    }
+    DATI_PER_QUADRATO = punteggi.specie.length + 1;
   } catch (errore) {
     document.getElementById("aggiornamento").textContent =
       "Non riesco a caricare i dati. Controlla la connessione e ricarica la pagina.";
@@ -394,6 +402,7 @@ async function avvia() {
   preparaLegenda();
   preparaVicini();
   preparaMiglioriQui();
+  preparaPreferiti();
   preparaRicerca();
 
   // Prima inquadratura: l'ultima area scelta, altrimenti tutte e due
@@ -782,6 +791,7 @@ function ricolora() {
   segnaGiorniMigliori();
   if (stato.posizione) aggiornaVicini();
   if (!document.getElementById("pannello-migliori").hidden) mostraMiglioriQui();
+  if (!document.getElementById("pannello-preferiti").hidden) mostraPreferiti();
 }
 
 /** Ridipinge solo le immagini che si stanno vedendo. */
@@ -1270,6 +1280,7 @@ async function apriSchedaQuadrato(q) {
         ${etichettaTendenza(tendenza(q.cella, q.k))}
       </div>
       ${righeAreeProtette(protette)}
+      <div class="preferito" data-preferito></div>
       <a class="bottone-secondario indicazioni" target="_blank" rel="noopener"
          href="https://www.google.com/maps/dir/?api=1&destination=${centro.lat.toFixed(5)},${centro.lng.toFixed(5)}">Indicazioni per arrivare qui</a>
       <dl>
@@ -1287,6 +1298,8 @@ async function apriSchedaQuadrato(q) {
   const altezzaMax = Math.max(180, mappa.getSize().y - 100);
   L.popup({ maxWidth: 300, maxHeight: altezzaMax, autoPanPadding: [16, 16] })
     .setLatLng(centro).setContent(html).openOn(mappa);
+  const box = document.querySelector(".leaflet-popup [data-preferito]");
+  if (box) sezionePreferito(box, q);
 }
 
 // ---------------------------------------------------------------------------
@@ -1688,7 +1701,10 @@ async function cercaPosto(testo) {
       contenuto.className = "segnaposto-ricerca";
       contenuto.innerHTML = `<strong>${testoSicuro(v.r.name || "")}</strong><br>` +
         `<button type="button">Togli segnaposto</button>`;
-      contenuto.querySelector("button").addEventListener("click", () => { mappa.closePopup(); togliSegnaRicerca(); });
+      contenuto.querySelector("button").addEventListener("click", (e) => {
+        L.DomEvent.stopPropagation(e);   // il tocco non deve arrivare alla mappa
+        mappa.closePopup(); togliSegnaRicerca();
+      });
       segnaRicerca = L.marker(v.punto, { title: v.r.name || "" }).bindPopup(contenuto).addTo(mappa);
       document.getElementById("ricerca").hidden = true;
       document.getElementById("apri-ricerca").setAttribute("aria-expanded", "false");
@@ -1702,6 +1718,131 @@ async function cercaPosto(testo) {
       mappa.setView(centro, zoom);
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Posti preferiti (salvati solo nel telefono)
+// ---------------------------------------------------------------------------
+
+let preferiti = [];           // [{nome, area, R, C}]
+let stratoPreferiti = null;
+
+function chiavePreferito(q) {
+  return `${q.area}:${q.R}:${q.C}`;
+}
+
+function salvaPreferiti() {
+  ricorda("preferiti", JSON.stringify(preferiti));
+  disegnaPreferiti();
+  if (!document.getElementById("pannello-preferiti").hidden) mostraPreferiti();
+}
+
+function preparaPreferiti() {
+  try { preferiti = JSON.parse(ricordato("preferiti") || "[]"); } catch (e) { preferiti = []; }
+  stratoPreferiti = L.layerGroup().addTo(mappa);
+  disegnaPreferiti();
+  const pannello = document.getElementById("pannello-preferiti");
+  document.getElementById("apri-preferiti").addEventListener("click", () => {
+    if (pannello.hidden) mostraPreferiti(); else pannello.hidden = true;
+  });
+  document.getElementById("preferiti-chiudi").addEventListener("click", () => { pannello.hidden = true; });
+}
+
+/** Stelline sulla mappa per i preferiti; toccandole si apre la scheda. */
+function disegnaPreferiti() {
+  stratoPreferiti.clearLayers();
+  preferiti.forEach((f) => {
+    const q = quadrato(f.area, f.R, f.C);
+    if (!q) return;
+    const centro = L.latLngBounds(confiniQuadrato(f.area, f.R, f.C)).getCenter();
+    const icona = L.divIcon({ className: "", html: '<div class="stella-preferito">★</div>', iconSize: [22, 22], iconAnchor: [11, 11] });
+    L.marker(centro, { icon: icona, title: f.nome, keyboard: false })
+      .on("click", () => { if (!stato.selezionando) apriSchedaQuadrato(q); })
+      .addTo(stratoPreferiti);
+  });
+}
+
+/** Nella scheda: "Salva nei preferiti" (con il nome) oppure "Nei preferiti, togli". */
+function sezionePreferito(box, q) {
+  // Il pulsante viene sostituito durante il tocco: Leaflet non lo trova più
+  // dentro la scheda e passerebbe il tocco alla mappa, che riaprirebbe la
+  // scheda. Lo fermiamo qui, con l'evento del browser (una volta sola per box).
+  if (!box.dataset.fermo) {
+    box.addEventListener("click", (e) => e.stopPropagation());
+    box.dataset.fermo = "1";
+  }
+  const chiave = chiavePreferito(q);
+  const esistente = preferiti.find((f) => chiavePreferito(f) === chiave);
+  if (esistente) {
+    box.innerHTML = `<button type="button" class="salvato">★ Nei preferiti: ${testoSicuro(esistente.nome)} (togli)</button>`;
+    box.querySelector("button").addEventListener("click", () => {
+      preferiti = preferiti.filter((f) => chiavePreferito(f) !== chiave);
+      salvaPreferiti();
+      sezionePreferito(box, q);
+    });
+    return;
+  }
+  box.innerHTML = `<button type="button">☆ Salva nei preferiti</button>`;
+  box.querySelector("button").addEventListener("click", () => {
+    const proposta = (q.cella.zona.split(/[,:(]/)[0] || "Posto").trim();
+    box.innerHTML = `<form><input type="text" maxlength="40" aria-label="Nome del posto" value="${testoSicuro(proposta)}">
+      <button type="submit">Salva</button></form>`;
+    const campo = box.querySelector("input");
+    campo.focus(); campo.select();
+    box.querySelector("form").addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      preferiti.push({ nome: campo.value.trim() || proposta, area: q.area, R: q.R, C: q.C });
+      salvaPreferiti();
+      sezionePreferito(box, q);
+      messaggio("Salvato nei preferiti.");
+    });
+  });
+}
+
+/** Elenco dei preferiti con punteggio di oggi, tendenza e gli 8 giorni. */
+function mostraPreferiti() {
+  const pannello = document.getElementById("pannello-preferiti");
+  const elenco = document.getElementById("elenco-preferiti");
+  pannello.hidden = false;
+  document.getElementById("preferiti-giorno").textContent = dataBreve(stato.punteggi.giorni[stato.giorno]);
+  if (!preferiti.length) {
+    elenco.innerHTML = `<li class="vuoto">Ancora nessun preferito. Tocca un quadrato sulla mappa e usa "Salva nei preferiti".</li>`;
+    return;
+  }
+  elenco.innerHTML = preferiti.map((f, i) => {
+    const q = quadrato(f.area, f.R, f.C);
+    if (!q) return `<li class="vuoto">${testoSicuro(f.nome)}: quadrato non più disponibile <button type="button" class="togli" data-togli="${i}" aria-label="Togli">✕</button></li>`;
+    const p = punteggioQuadrato(q.cella, q.k);
+    const valori = stato.punteggi.giorni.map((_, g) => punteggioQuadrato(q.cella, q.k, g));
+    const migliori = giorniMigliori(valori);
+    const centro = L.latLngBounds(confiniQuadrato(f.area, f.R, f.C)).getCenter();
+    const distanza = stato.posizione ? ` · ${numero(distanzaKm(stato.posizione, centro), 1)} km` : "";
+    const mini = valori.map((v, g) => `<span style="background:${colore(v)}" title="${dataBreve(stato.punteggi.giorni[g])}: ${Math.round(v)}">${migliori.includes(g) ? "★" : Math.round(v)}</span>`).join("");
+    return `<li>
+        <button type="button" data-vai="${i}">
+          <span class="dettagli-posto">
+            <strong>${testoSicuro(f.nome)}</strong> ·
+            <strong style="color:${colore(p)}">${Math.round(p)}</strong> ${giudizio(p).toLowerCase()}
+            ${etichettaTendenza(tendenza(q.cella, q.k))}${distanza}
+            <span class="mini-giorni">${mini}</span>
+          </span>
+        </button>
+        <button type="button" class="togli" data-togli="${i}" aria-label="Togli ${testoSicuro(f.nome)}">✕</button>
+      </li>`;
+  }).join("");
+  elenco.querySelectorAll("[data-vai]").forEach((b) => b.addEventListener("click", () => {
+    const f = preferiti[Number(b.dataset.vai)];
+    const q = quadrato(f.area, f.R, f.C);
+    pannello.hidden = true;
+    if (stato.selezionando) impostaModalita(false);
+    const centro = L.latLngBounds(confiniQuadrato(f.area, f.R, f.C)).getCenter();
+    mappa.once("moveend", () => apriSchedaQuadrato(q));
+    mappa.setView(centro, Math.max(mappa.getZoom(), 15));
+  }));
+  elenco.querySelectorAll("[data-togli]").forEach((b) => b.addEventListener("click", () => {
+    preferiti.splice(Number(b.dataset.togli), 1);
+    salvaPreferiti();
+  }));
 }
 
 // ---------------------------------------------------------------------------

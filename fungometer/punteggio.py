@@ -161,6 +161,7 @@ def fattore_stagione(giorno, mesi_centrali, mesi_margine, quota=None, regole=Non
     if quota is not None and regole:
         spostamento = (quota - regole["quota_riferimento"]) / 100 * regole["giorni_per_100m"]
         estiva = min(mesi_centrali) <= regole["ultimo_mese_estivo"]
+        primaverile = max(mesi_centrali) <= regole.get("ultimo_mese_primaverile", 0)
         anno = giorno.year
         meta = _primo_del_mese(anno, min(mesi_centrali)) + (
             _primo_del_mese(anno, max(mesi_centrali) + 1) - _primo_del_mese(anno, min(mesi_centrali))) / 2
@@ -168,8 +169,8 @@ def fattore_stagione(giorno, mesi_centrali, mesi_margine, quota=None, regole=Non
             # inizio: dopo (estive) o prima (autunnali) quando si sale
             ritardo = spostamento if estiva else -spostamento
         else:
-            # fine: sempre prima quando si sale
-            ritardo = -spostamento
+            # fine: prima quando si sale; per le specie di primavera, dopo
+            ritardo = spostamento if primaverile else -spostamento
         return fattore_stagione(giorno - timedelta(days=round(ritardo)), mesi_centrali, mesi_margine)
     anno = giorno.year
     primo, ultimo = min(mesi_centrali), max(mesi_centrali)

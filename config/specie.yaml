@@ -69,6 +69,9 @@ comune:
     # Hopkins (circa 4 giorni ogni 122 m di quota), non misurata sui funghi.
     giorni_per_100m: 3
     ultimo_mese_estivo: 7       # le specie con stagione piena da luglio in giù sono "estive"
+    # Le specie di primavera (stagione piena finita entro giugno) in alto
+    # arrivano dopo sia all'inizio sia alla fine: la primavera sale lentamente.
+    ultimo_mese_primaverile: 6
   gelo:
     soglia_tmin: 0              # una notte di gelo ha la minima a 0 °C o sotto
     giorni: 7                   # si contano le notti di gelo dell'ultima settimana
@@ -170,3 +173,90 @@ specie:
       margine:
         bosco: [t1, t2, t3, t4, t5, t6, t7, t8, t9, c311, c312, c313]
         aperto: [t10, t11, c211, c231, c242, c243, c321, c322, c324]
+
+  trombetta_dei_morti:
+    nome: "Trombetta dei morti"
+    latino: "Craterellus cornucopioides"
+    ambiente: "faggio, quercia, castagno; posti umidi e muschiosi"
+    mesi_centrali: [9, 10]
+    mesi_margine: [8, 11]
+    quota: [300, 1500]
+    pioggia_mm: 65              # ama i periodi molto bagnati
+    temperatura: [10, 18]
+    temperatura_ottimale: 14
+    habitat:
+      adatte: [t1, t2, t3, t4, t8, c311]
+      parziali: [t7, c313, c222]
+
+  chiodino:
+    nome: "Chiodino (famigliola buona)"
+    latino: "Armillaria mellea"
+    ambiente: "ceppaie e radici di latifoglie e conifere, anche nei frutteti"
+    mesi_centrali: [10]
+    mesi_margine: [9, 11]
+    quota: [0, 1500]
+    pioggia_mm: 50
+    temperatura: [8, 17]
+    temperatura_ottimale: 12
+    habitat:
+      adatte: [t1, t2, t3, t4, t5, t6, t7, t8, t9, c311, c312, c313, c222, c324]
+      parziali: [t10, c242, c243]
+
+  prugnolo:
+    nome: "Prugnolo (spinarolo)"
+    latino: "Calocybe gambosa"
+    ambiente: "pascoli, radure e margini, spesso vicino a prugnoli e biancospini"
+    mesi_centrali: [5]
+    mesi_margine: [4, 6]
+    quota: [400, 1800]
+    pioggia_mm: 45
+    temperatura: [8, 16]
+    temperatura_ottimale: 12
+    habitat:
+      adatte: [t10, t11, c231, c321, c322, c324, c243]
+      parziali: [t1, t2, t3, t4, t5, t6, t7, t8, t9, c311, c312, c313]
+      margine:
+        bosco: [t1, t2, t3, t4, t5, t6, t7, t8, t9, c311, c312, c313]
+        aperto: [t10, t11, c211, c231, c242, c243, c321, c322, c324]
+
+  spugnola:
+    nome: "Spugnola"
+    latino: "Morchella esculenta, M. conica"
+    ambiente: "boschi lungo i fiumi, frassini e olmi, frutteti, terreni smossi o bruciati"
+    mesi_centrali: [3, 4]
+    mesi_margine: [2, 5]
+    quota: [0, 1400]
+    pioggia_mm: 40
+    temperatura: [7, 14]
+    temperatura_ottimale: 11
+    habitat:
+      adatte: [t9, c222, c324]
+      parziali: [t1, t2, t3, t4, t5, t6, t7, t8, c311, c313, c242, c243]
+
+  sanguinello:
+    nome: "Sanguinello (lattario delizioso)"
+    latino: "Lactarius deliciosus, L. sanguifluus"
+    ambiente: "pinete"
+    mesi_centrali: [10]
+    mesi_margine: [9, 11]
+    quota: [0, 1600]
+    pioggia_mm: 50
+    temperatura: [10, 18]
+    temperatura_ottimale: 14
+    habitat:
+      adatte: [t6, c312]
+      parziali: [c313]
+
+  colombina:
+    nome: "Colombina"
+    latino: "Russula virescens, R. cyanoxantha"
+    ambiente: "latifoglie: querce, castagno, faggio"
+    mesi_centrali: [7, 8, 9]
+    mesi_margine: [6, 10]
+    quota: [200, 1300]
+    pioggia_mm: 50
+    temperatura: [15, 24]
+    temperatura_ottimale: 19
+    habitat:
+      adatte: [t1, t2, t3, t4, t8, c311]
+      parziali: [t5, t7, c313, c222]

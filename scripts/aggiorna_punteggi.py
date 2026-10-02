@@ -5,7 +5,8 @@
 
 Legge:  data/celle.json e data/sottocelle.json (da prepare_static.py)
         config/specie.yaml
-Scrive: docs/data/punteggi.json            meteo e fattori delle celle, cambia ogni giorno
+Scrive: docs/data/punteggi.json            data, giorni, specie e regole (piccolo)
+        docs/data/punteggi_<area>.json     meteo e fattori delle celle di un'area, cambia ogni giorno
         docs/data/celle.json               forma e dati fissi delle celle, per la mappa
         docs/data/statiche.json            6 numeri per sottocella: servono a colorare la mappa
         docs/data/sottocelle/<zona>.json   schede complete delle sottocelle, una per zona
@@ -33,8 +34,8 @@ Formato di punteggi.json (scritto compatto per restare sotto 1 MB):
 }
 
 Formato di docs/data/statiche.json:
-{ "id cella": [36 x 6 numeri, sottocella dopo sottocella (per righe da sud a nord):
-               habitat x quota per ognuna delle 5 specie, poi il fattore terreno;
+{ "id cella": [36 x (specie + 1) numeri, sottocella dopo sottocella (per righe da sud a nord):
+               habitat x quota per ognuna delle specie, poi il fattore terreno;
                255 se la sottocella è acqua] }
 L'app calcola il punteggio di ogni quadrato da 500 m così:
   100 x acqua x temperatura x stagione x (habitat x quota) x terreno
@@ -274,7 +275,15 @@ def main():
     giorni = date_meteo[inizio: inizio + GIORNI_FUTURI]
 
     dati = calcola(celle, config, statici, date_meteo, meteo_per_cella, giorni)
+    # Un file per area, così ognuno resta sotto 1 MB anche con molte specie
+    per_area = {}
+    for cella in celle:
+        per_area.setdefault(cella["area"], {})[cella["id"]] = dati["celle"][cella["id"]]
+    dati["celle"] = {}
+    dati["aree"] = sorted(per_area)
     kb = scrivi_json(dati, uscita_punteggi)
+    for area, celle_area in per_area.items():
+        kb = max(kb, scrivi_json({"celle": celle_area}, RADICE / "docs" / "data" / f"punteggi_{area}.json"))
     scrivi_json(celle_per_la_mappa(celle), RADICE / "docs" / "data" / "celle.json")
     scrivi_json(statiche_leggere(celle, statici, config), RADICE / "docs" / "data" / "statiche.json")
     totale = 0
@@ -284,7 +293,7 @@ def main():
     print(f"Scritte le sottocelle di tutte le zone ({totale:.0f} KB in totale)")
 
     if kb > 1024:
-        sys.exit("ATTENZIONE: punteggi.json supera 1 MB")
+        sys.exit("ATTENZIONE: un file dei punteggi supera 1 MB")
 
 
 if __name__ == "__main__":

@@ -562,6 +562,30 @@ button, select { font: inherit; color: inherit; }
 .vicini-azioni { display: flex; gap: 8px; margin-top: 8px; }
 .vicini-azioni .bottone-primario { flex: 1; width: auto; padding: 8px; }
 .scheda .indicazioni { display: block; margin: 0 0 8px; font-size: 0.9rem; }
+
+/* Preferiti */
+.scheda .preferito { margin: 0 0 8px; }
+.scheda .preferito button {
+  padding: 6px 12px; border: 1px solid #9a5b00; border-radius: 999px;
+  background: #fff; color: #9a5b00; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+}
+.scheda .preferito button.salvato { background: #9a5b00; color: #fff; }
+.scheda .preferito form { display: flex; gap: 6px; }
+.scheda .preferito input {
+  flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--bordo); border-radius: 999px; font: inherit; font-size: 0.85rem;
+}
+.elenco-preferiti li { display: flex; align-items: center; gap: 6px; }
+.elenco-preferiti li > button:first-child { flex: 1; }
+.elenco-preferiti .togli {
+  flex: 0 0 auto; width: 30px; height: 30px; border: none; border-radius: 50%;
+  background: #f6e6e6; color: #a33; font-size: 1rem; cursor: pointer;
+}
+.elenco-preferiti .mini-giorni { display: flex; gap: 2px; margin-top: 4px; }
+.elenco-preferiti .mini-giorni span { width: 14px; border-radius: 2px; font-size: 0.6rem; line-height: 1; text-align: center; color: #fff; padding: 2px 0; }
+.stella-preferito {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: #9a5b00; color: #fff; font-size: 13px; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
 .scheda .area-protetta {
   margin: 0 0 8px; padding: 6px 8px; border-radius: 8px;
   background: #f3e8f7; border-left: 3px solid #6a1b9a; font-size: 0.8rem; line-height: 1.35;
@@ -592,3 +616,16 @@ button, select { font: inherit; color: inherit; }
 
 /* Con una scheda aperta anche il selettore delle mappe si toglie di mezzo */
 .scheda-aperta .leaflet-control-layers { display: none; }
+
+/* Testata sui telefoni stretti: tutto deve stare in una riga */
+@media (max-width: 430px) {
+  .testata { padding-left: 12px; padding-right: 10px; }
+  .marchio { gap: 6px; }
+  .marchio h1 { font-size: 1rem; }
+  .testata-azioni { gap: 4px; }
+  .bottone-avvertenze, .link-info { padding: 5px 9px; font-size: 0.85rem; }
+  .bottone-lente { width: 32px; height: 32px; }
+}
+@media (max-width: 360px) {
+  .marchio h1 { display: none; }
+}

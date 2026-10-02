@@ -19,7 +19,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-  <link rel="stylesheet" href="stile.css?v=12">
+  <link rel="stylesheet" href="stile.css?v=15">
 </head>
 <body>
   <header class="testata">
@@ -32,6 +32,11 @@
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
           <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/>
           <path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button type="button" id="apri-preferiti" class="bottone-lente" aria-label="I tuoi posti preferiti" title="Preferiti">
+        <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
+          <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8 6.8 19.6l1-5.8L3.5 9.7l5.9-.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
         </svg>
       </button>
       <button type="button" id="apri-avvertenze" class="bottone-avvertenze">Avvertenze</button>
@@ -95,6 +100,15 @@
     <button type="button" id="migliori-qui" class="bottone-migliori" aria-pressed="false"
             title="I 5 quadrati migliori sullo schermo nel giorno scelto">★ Migliori qui</button>
 
+    <!-- I tuoi posti preferiti -->
+    <div id="pannello-preferiti" class="pannello-migliori" hidden>
+      <div class="intestazione-pannello">
+        <strong>I tuoi preferiti</strong> <span id="preferiti-giorno"></span>
+        <button type="button" id="preferiti-chiudi" class="chiudi" aria-label="Chiudi">×</button>
+      </div>
+      <ul id="elenco-preferiti" class="elenco-migliori elenco-preferiti"></ul>
+    </div>
+
     <!-- I 5 quadrati migliori sullo schermo -->
     <div id="pannello-migliori" class="pannello-migliori" hidden>
       <div class="intestazione-pannello">
@@ -148,7 +162,8 @@
     <ul class="lista-avvertenze">
       <li><strong>Il punteggio non garantisce ritrovamenti.</strong> Stima solo se meteo, stagione, quota e ambiente sono favorevoli.</li>
       <li><strong>L'app non identifica i funghi.</strong> Fai controllare ogni raccolta all'Ispettorato micologico della tua ASL: il controllo è gratuito.</li>
-      <li><strong>Ovolo buono e mazza di tamburo hanno sosia velenosi o mortali</strong> (per esempio l'Amanita muscaria da giovane e le piccole Lepiota). Nel dubbio non raccogliere e non mangiare.</li>
+      <li><strong>Ovolo buono, mazza di tamburo, chiodino, prugnolo e spugnola hanno sosia velenosi o mortali</strong> (per esempio l'Amanita muscaria da giovane, le piccole Lepiota, la Galerina marginata, l'Entoloma sinuatum, la Gyromitra). Nel dubbio non raccogliere e non mangiare.</li>
+      <li><strong>Chiodini e spugnole crudi sono tossici:</strong> vanno sempre cotti a lungo.</li>
       <li><strong>Rispetta le norme regionali</strong> di Umbria e Lazio: tesserino, quantità, giorni e orari di raccolta, aree protette. Informati presso il Comune o la Regione.</li>
       <li><strong>Emergenze: chiama il 112.</strong> Per un sospetto avvelenamento puoi chiamare anche un Centro antiveleni, attivo giorno e notte:
         <ul>
@@ -163,6 +178,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

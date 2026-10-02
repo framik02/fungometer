@@ -257,6 +257,14 @@ def test_stagione_autunnale_in_alto_comincia_prima():
     assert s(date(2026, 11, 15), 1500) < s(date(2026, 11, 15), 600)
 
 
+def test_specie_di_primavera_in_alto_arrivano_dopo():
+    sp = SPECIE["prugnolo"]                # stagione piena maggio, margini aprile e giugno
+    regole = COMUNE["stagione"]
+    s = lambda giorno, quota: fattore_stagione(giorno, sp["mesi_centrali"], sp["mesi_margine"], quota, regole)
+    assert s(date(2026, 4, 20), 1500) < s(date(2026, 4, 20), 600)   # in alto comincia dopo
+    assert s(date(2026, 6, 10), 1500) > s(date(2026, 6, 10), 600)   # e finisce dopo
+
+
 def test_gelo():
     regole = COMUNE["gelo"]
     meteo = meteo_costante(tmed=5)
