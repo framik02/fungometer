@@ -258,7 +258,16 @@ button, select { font: inherit; color: inherit; }
 .scheda-aperta .leaflet-control-zoom { display: none; }
 
 .leaflet-popup-content { margin: 12px 14px; font-size: 0.9rem; line-height: 1.35; }
-.scheda h3 { margin: 0 0 2px; font-size: 1rem; }
+/* Le schede lunghe scorrono dentro sé stesse, senza muovere la mappa */
+.leaflet-popup-scrolled {
+  border: none; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+  scrollbar-width: thin; scrollbar-color: #b9ae9c transparent;
+}
+.leaflet-popup-content { overflow-wrap: anywhere; }
+.leaflet-popup-content dl { overflow-wrap: normal; }
+/* La × resta visibile sopra il testo che scorre */
+.leaflet-container a.leaflet-popup-close-button { z-index: 2; width: 30px; height: 30px; font-size: 22px; line-height: 28px; }
+.scheda h3 { margin: 0 0 2px; padding-right: 24px; font-size: 1rem; }
 .scheda .zona { color: var(--testo-tenue); font-size: 0.8rem; margin-bottom: 8px; }
 .scheda .punteggio { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
 .scheda .numero { font-size: 2rem; font-weight: 700; line-height: 1; }
@@ -546,4 +555,17 @@ button, select { font: inherit; color: inherit; }
 }
 @media (max-width: 360px) {
   .marchio h1 { display: none; }
+}
+
+/* Schermi bassi (telefono in orizzontale): le due barre si mettono in riga */
+@media (max-height: 500px) {
+  .barra-strumenti { flex-direction: row; width: auto; }
+  .strumento { width: 62px; padding: 6px 2px 4px; }
+  .strumento + .strumento, .zoom + .strumento { border-top: none; border-left: 1px solid #eee7dc; }
+  .zoom { flex-direction: row; }
+  .zoom button { width: 40px; height: auto; }
+  .zoom button + button { border-top: none; border-left: 1px solid #eee7dc; }
+  .barra-bassa { bottom: 22px; }
+  .bottone-filtri { max-width: calc(100% - 290px); }
+  .legenda { bottom: 18px; }
 }

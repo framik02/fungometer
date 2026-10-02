@@ -697,7 +697,8 @@ function preparaMappa() {
   // Con una scheda aperta nascondiamo legenda e pulsanti: sui telefoni
   // piccoli coprirebbero la scheda.
   const contenitore = document.querySelector(".contenitore-mappa");
-  mappa.on("popupopen", () => {
+  mappa.on("popupopen", (ev) => {
+    adattaScheda(ev.popup);
     contenitore.classList.add("scheda-aperta");
     document.getElementById("messaggio").hidden = true;   // il messaggio non deve coprire la scheda
   });
@@ -1346,12 +1347,26 @@ async function apriSchedaQuadrato(q) {
       <p class="nota">Il meteo è quello della zona di 3 km intorno. <a href="info.html">Come si calcola</a></p>
     </div>`;
 
-  // Altezza massima: la scheda non esce mai dalla mappa, al massimo scorre
-  const altezzaMax = Math.max(180, mappa.getSize().y - 100);
-  L.popup({ maxWidth: 300, maxHeight: altezzaMax, autoPanPadding: [16, 16] })
-    .setLatLng(centro).setContent(html).openOn(mappa);
+  const finestra = L.popup().setLatLng(centro).setContent(html).openOn(mappa);
   const box = document.querySelector(".leaflet-popup [data-preferito]");
   if (box) sezionePreferito(box, q);
+  finestra.update();   // la riga dei preferiti allunga la scheda: rifacciamo i conti
+}
+
+/**
+ * Ogni scheda (quadrato, posto dal web, ricerca) sta tutta dentro la mappa:
+ * larga al massimo quanto lo schermo meno i margini, alta al massimo quanto
+ * la mappa meno la punta della scheda. Se il testo è più lungo, scorre.
+ */
+function adattaScheda(scheda) {
+  const { x, y } = mappa.getSize();
+  const o = scheda.options;
+  o.maxWidth = Math.min(300, x - 60);
+  o.minWidth = Math.min(o.minWidth || 50, o.maxWidth);
+  o.maxHeight = Math.max(160, y - 70);
+  o.autoPanPaddingTopLeft = [12, 12];
+  o.autoPanPaddingBottomRight = [12, 12];
+  scheda.update();
 }
 
 // ---------------------------------------------------------------------------
@@ -1924,7 +1939,7 @@ async function accendiWeb() {
       const segno = p.tipo === "zona"
         ? L.circle([p.lat, p.lon], { ...opzioni, radius: 1500 + 700 * forza, fillOpacity: 0.12, dashArray: "4 4" })
         : L.circleMarker([p.lat, p.lon], { ...opzioni, radius: 5 + 3 * forza, fillOpacity: 0.85, color: "#fff" });
-      segno.bindPopup(() => schedaWeb(p), { maxWidth: 280 });
+      segno.bindPopup(() => schedaWeb(p));
       stratoWeb.addLayer(segno);
     });
     stratoWeb.addTo(mappa);
