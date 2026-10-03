@@ -744,6 +744,7 @@ function preparaMappa() {
   });
 
   mappa.on("zoomend", () => {
+    aggiornaRaggiWeb();
     if (stato.punteggi) aggiornaStileZoom();
   });
 
@@ -2536,6 +2537,23 @@ async function mostraPreferiti() {
 
 let stratoWeb = null;
 
+/**
+ * Raggio in pixel di un posto preciso: cresce con le fonti (fino a un tetto) e
+ * si rimpicciolisce da lontano, così l'Italia intera non sparisce sotto i cerchi.
+ */
+function raggioWeb(forza) {
+  const z = mappa.getZoom();
+  const scala = z <= 6 ? 0.35 : z <= 8 ? 0.5 : z <= 10 ? 0.75 : 1;
+  return Math.max(2.5, (4 + 2.5 * Math.min(forza, 5)) * scala);
+}
+
+function aggiornaRaggiWeb() {
+  if (!stratoWeb) return;
+  stratoWeb.eachLayer((segno) => {
+    if (segno.setRadius && segno.forza !== undefined && !(segno instanceof L.Circle)) segno.setRadius(raggioWeb(segno.forza));
+  });
+}
+
 function spegniWeb() {
   if (stratoWeb) stratoWeb.remove();
   stratoWeb = null;
@@ -2556,7 +2574,8 @@ async function accendiWeb() {
       // Zone ampie: alone largo e trasparente; posti precisi: cerchio pieno
       const segno = p.tipo === "zona"
         ? L.circle([p.lat, p.lon], { ...opzioni, radius: 1500 + 700 * forza, fillOpacity: 0.12, dashArray: "4 4" })
-        : L.circleMarker([p.lat, p.lon], { ...opzioni, radius: 5 + 3 * forza, fillOpacity: 0.85, color: "#fff" });
+        : L.circleMarker([p.lat, p.lon], { ...opzioni, radius: raggioWeb(forza), fillOpacity: 0.85, color: "#fff" });
+      segno.forza = forza;
       segno.bindPopup(() => schedaWeb(p));
       stratoWeb.addLayer(segno);
     });

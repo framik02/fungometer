@@ -83,6 +83,37 @@ selva macchia cerreto faggeta castagneto pineta lecceta cava cave porta grotta g
                 "campania", "puglia", "calabria", "sicilia", "sardegna", "friuli", "trentino", "emilia",
                 "romagna", "basilicata", "valle d'aosta", "europa", "francia", "spagna", "germania"}
 
+# Saluti, complimenti e nomi propri di persona: con tutta Italia sono anche
+# frazioni da qualche parte ("Buongiorno", "Salve", "Stefano"), ma nei commenti
+# quasi sempre sono un saluto o una persona.
+PERSONE_E_SALUTI = set("""
+buongiorno buonasera buonanotte salve ciao bravi bravo brava brave grazie complimenti auguri capitano
+beati beato beata grande grandi mitico mitica fortunato fortunata fratello amico amici signore signora
+stefano mauro daniele francesco giuseppe marco luca andrea paolo giovanni antonio mario roberto
+alessandro davide matteo simone fabio massimo claudio sergio franco enzo gianni giorgio luigi pietro
+angelo salvatore vincenzo carlo alberto maurizio michele nicola riccardo enrico emanuele federico
+filippo gabriele giacomo lorenzo fabrizio raffaele domenico bruno renato sandro piero rocco valerio
+walter gino aldo dario cesare ettore tommaso vittorio giulio mirko diego ivan nino tonino peppe
+maria anna giulia francesca laura sara paola elena chiara silvia valentina rosa lucia giovanna angela
+teresa carla daniela monica barbara roberta patrizia simona cristina federica marina sabrina alessandra
+romania olanda francia spagna germania svizzera austria slovenia croazia polonia ucraina russia
+america canada brasile argentina inghilterra belgio grecia albania serbia bosnia ungheria portogallo
+svezia norvegia finlandia scozia irlanda cina giappone india turchia marocco egitto australia messico
+washington florida california texas london londra parigi
+salvini bolognesi marin falco cecchetto ceppo caldara
+""".split()) | {"parco pubblico"} | set("""
+""".split()) | {"mio caro", "via di mezzo", "pianura padana", "gran bosco", "casa del bosco"}
+
+# Inizi di frasi comuni che a volte sono anche toponimi ("Casa Pasquale", "Via di Mezzo")
+INIZI_GENERICI = ("casa ", "via ", "mio ", "mia ", "centro ", "case ")
+
+# Indizi di luogo: un nome di una sola parola conta solo se una di queste
+# parole lo precede da vicino ("nei boschi di Viggiano", "zona Bardi", "a Bobbio")
+INDIZI_LUOGO = {"a", "ad", "in", "verso", "zona", "presso", "vicino", "sopra", "sotto",
+                "dintorni", "boschi", "bosco", "localita", "loc", "frazione", "sul", "sulla", "sui",
+                "nei", "nel", "nella", "al", "alla", "tra", "fra", "dalle", "parti", "monti",
+                "montagne", "valle", "pineta", "faggeta", "castagneto", "comune"}
+
 # Un nome non può cominciare con un articolo o una preposizione ("la terra", "dei monti")
 INIZI_VIETATI = ("il ", "lo ", "la ", "le ", "gli ", "i ", "l'", "del ", "dei ", "della ", "delle ", "degli ",
                  "di ", "da ", "in ", "a ")
@@ -300,13 +331,46 @@ def testi():
             yield ("reddit", pid, p["url"], c["data"], c["testo"], bool(FUNGHI.search(contesto)))
 
 
+def parole(testo):
+    """Parole in minuscolo e senza accenti; trattini e punti diventano spazi."""
+    return re.findall(r"[a-z0-9']+", senza_accenti(testo).replace("-", " ").replace(".", " "))
+
+
+class Cercatore:
+    """Trova i nomi di posto in un testo guardando i gruppi di 1-6 parole.
+
+    Con tutta Italia i nomi sono decine di migliaia: un'unica espressione
+    regolare li proverebbe uno per uno in ogni punto del testo. Qui ogni gruppo
+    di parole si cerca in un dizionario. A parità di punto vince il nome più
+    lungo ("monte cucco" prima di "cucco"), e le parole già prese non si
+    riusano, come faceva l'espressione regolare.
+    """
+
+    def __init__(self, chiavi):
+        self.per_parole = {}
+        for chiave in chiavi:
+            self.per_parole[" ".join(parole(chiave))] = chiave
+        self.massimo = max((k.count(" ") + 1 for k in self.per_parole), default=1)
+
+    def trova(self, testo):
+        """Coppie (chiave, vero se una delle due parole prima è un indizio di luogo)."""
+        p = parole(testo)
+        trovati, i = [], 0
+        while i < len(p):
+            for n in range(min(self.massimo, len(p) - i), 0, -1):
+                chiave = self.per_parole.get(" ".join(p[i:i + n]))
+                if chiave:
+                    trovati.append((chiave, any(w in INDIZI_LUOGO for w in p[max(0, i - 2):i])))
+                    i += n
+                    break
+            else:
+                i += 1
+        return trovati
+
+
 def main():
     nomi = toponimi()
     print(f"Toponimi utilizzabili nelle nostre aree: {len(nomi)}")
-    # Un'unica espressione regolare con tutti i nomi, dal più lungo (così "monte cucco" vince su "cucco")
-    elenco = sorted(nomi, key=len, reverse=True)
-    trova = re.compile(r"(?<![a-z])(" + "|".join(re.escape(n) for n in elenco) + r")(?![a-z])")
-
     # Parole comuni scoperte dai dati: un nome di una sola parola che nei testi
     # compare spesso in minuscolo ("costano", "di norma") non è un toponimo
     # (cioè più spesso in minuscolo che con la maiuscola: "norcia" scritto in
@@ -320,8 +384,7 @@ def main():
     for n in comuni_dai_dati:
         del nomi[n]
     print(f"Nomi scartati perché parole comuni nei testi: {len(comuni_dai_dati)}")
-    elenco = sorted(nomi, key=len, reverse=True)
-    trova = re.compile(r"(?<![a-z])(" + "|".join(re.escape(n) for n in elenco) + r")(?![a-z])")
+    cercatore = Cercatore(nomi)
 
     posti = defaultdict(lambda: {"fonti": {}, "specie": Counter(), "testi": 0, "estratti": []})
     letti = in_tema = 0
@@ -331,8 +394,22 @@ def main():
         if not (contesto_funghi or FUNGHI.search(testo)) or RUMORE.search(testo):
             continue
         in_tema += 1
-        normale = senza_accenti(testo)
-        trovati = set(trova.findall(normale))
+        trovati = set()
+        for chiave, indizio in cercatore.trova(testo):
+            if chiave in ZONE_AMPIE:
+                trovati.add(chiave)
+                continue
+            if chiave in PERSONE_E_SALUTI or chiave.startswith(INIZI_GENERICI):
+                continue
+            # "Bosco I", "Centro A": l'ultima parola di una lettera è quasi sempre l'articolo dopo
+            if " " in chiave and len(chiave.split(" ")[-1]) == 1:
+                continue
+            # Una parola sola, o un santo ("San Francesco"), può essere una persona o
+            # un saluto: serve un indizio di luogo subito prima
+            santo = chiave.split(" ")[0] in ("san", "santa", "santo", "sant'", "santi") or chiave.startswith("sant'")
+            if (" " not in chiave or santo) and not indizio:
+                continue
+            trovati.add(chiave)
         # Un nome di una sola parola deve comparire con la maiuscola, come un nome
         # proprio: così "costano" o "forma" scritti in minuscolo non contano
         if trovati:
