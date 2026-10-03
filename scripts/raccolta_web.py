@@ -121,6 +121,12 @@ class YouTube:
                 log(f"quota finita per la chiave {self.indice + 1}, passo alla successiva")
                 self.indice += 1
                 continue
+            if r.status_code in (403, 429) and "per day" in r.text:
+                # Limite giornaliero (anche di sole ricerche): si passa alla chiave dopo
+                log(f"limite giornaliero per la chiave {self.indice + 1}, passo alla successiva")
+                self.indice += 1
+                attese_429 = 0
+                continue
             if r.status_code == 429 and attese_429 < 10:
                 attese_429 += 1
                 log(f"  {risorsa}: troppe richieste al minuto, aspetto 60 s")

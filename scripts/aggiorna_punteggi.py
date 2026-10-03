@@ -251,7 +251,14 @@ def serve_aggiornare(percorso_punteggi, ora_minima=4):
     if percorso_punteggi.exists():
         with open(percorso_punteggi, encoding="utf-8") as f:
             aggiornato = json.load(f).get("aggiornato", "")
-        if aggiornato.startswith(adesso.date().isoformat()):
+        # Conta solo un aggiornamento fatto oggi dopo l'ora minima: uno lanciato a
+        # mano dopo mezzanotte (il 3 ottobre 2026 alle 0:29) non deve far saltare
+        # quello del mattino, che scarica il meteo nuovo.
+        try:
+            quando = datetime.fromisoformat(aggiornato).astimezone(FUSO)
+        except ValueError:
+            quando = None
+        if quando and quando.date() == adesso.date() and quando.hour >= ora_minima:
             print(f"Punteggi già aggiornati oggi ({aggiornato}), esco.")
             return False
     return True
