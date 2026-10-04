@@ -72,4 +72,11 @@ jobs:
             exit 0
           fi
           git commit -m "Punteggi del $(TZ=Europe/Rome date +%Y-%m-%d)"
-          git push
+          # Il lavoro dura più di un'ora: nel frattempo qualcuno può aver fatto
+          # push. Ci si mette in coda ai suoi commit e si riprova (fino a 3 volte).
+          for tentativo in 1 2 3; do
+            git pull --rebase && git push && exit 0
+            echo "Push rifiutato, riprovo fra 20 secondi"
+            sleep 20
+          done
+          exit 1
