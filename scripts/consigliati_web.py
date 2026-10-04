@@ -57,6 +57,13 @@ SPECIE = {
 }
 FUNGHI = re.compile(r"\bfung[hio]|\bfunghett|" + "|".join(SPECIE.values()), re.I)
 SPECIE_RE = {k: re.compile(v, re.I) for k, v in SPECIE.items()}
+# "Galletti" con la maiuscola è quasi sempre un cognome (un ministro, un manager, un
+# necrologio): come segnale di funghi conta solo in minuscolo
+COGNOME_GALLETTI = re.compile("(?<![A-Za-z])Gallett[io](?![a-z])")
+
+
+def parla_di_funghi(testo):
+    return bool(FUNGHI.search(COGNOME_GALLETTI.sub(" ", testo)))
 
 # Testi che parlano di funghi ma non di raccolta: sagre, feste, ricette.
 # Se è il titolo del video o del post, si scartano anche tutti i suoi commenti.
@@ -64,8 +71,37 @@ RUMORE = re.compile(
     r"\bsagr[ae]\b|\bfest[ae] del fungo|\bfier[ae]\b|ricett|ingredient|\bcucin|salsicc|tagliatell|fettuccin"
     r"|fusilli|risott|primo piatto|\bchef\b|in padella|al forno|trifolat|monte i porcini|ristorant|degustazion"
     r"|lenticchi|\bdieta\b|prodotti tipici|\bmenu\b|\bpizz|bruschett"
-    r"|m(?:on)?\.?te\s*\"?\s*(?:i\s+)?porcini|fonte\s+porcini|rifugio\s+porcini|mostra micologic|mostra del fung|mostra mercato|tartuf|\bolio\b|\bpranz|\bcen[ae]\b|#food|\bcibo\b|coltivat",
+    r"|m(?:on)?\.?te\s*\"?\s*(?:i\s+)?porcini|fonte\s+porcini|rifugio\s+porcini|mostra micologic|mostra del fung|mostra mercato|tartuf|\bolio\b|\bpranz|\bcen[ae]\b|#food|\bcibo\b|coltivat"
+    # Eventi, commercio e cucina
+    r"|\bfest[ae] dei funghi|campionat|esposizion|\bmostr[ae]\b|azienda agricola|champignon|prataiol|\bvendita\b"
+    r"|negozio|\bzupp[ae]\b|\bsugo\b|\bpiatt[oi]\b"
+    # Cronaca nera: non sono consigli su dove andare
+    r"|\bmort[oaie]\b|dispers[oaie]\b|salvataggio|soccors|scompars|cordoglio|tragedi|intossica|avvelenat|malore"
+    r"|funeral|sanzion|vendevan|\bfest[ae]\b|\btel\b\.?\s*\[?\d|gusto a casa tua"
+    r"|\bmuor[eio]|aggredis|aggression|killer|\bsuina\b|\bmen[uù]\b|trattoria|osteria"
+    r"|appuntament|concert|polenta|pappardell|ballett|bike park",
     re.I)
+
+# Chi dice dove abita o da dove saluta non sta dicendo dove trova funghi:
+# "io sono del lago di Como", "abito ad Allumiere", "un abbraccio dal Montefeltro"
+DOVE_ABITA = {"abito", "abitavo", "abitiamo", "abitare", "abita", "abitano", "vivo", "viviamo", "saluto", "saluti", "salutone",
+              "abbraccio", "abbracci", "abbraccione", "nato", "nata", "originario", "originaria", "trasferito",
+              "trasferita", "casa", "residente"}
+PRIMA_DI_UN_NOME = {"monte", "monti", "mont", "val", "valle", "lago", "passo", "colle", "pizzo", "cima", "punta",
+                    "bosco", "rifugio", "forcella", "piano", "pian", "poggio", "sasso", "costa", "fonte", "torrente",
+                    "fiume", "rio", "foresta", "parco", "alpe", "malga", "località", "localita", "contrada"}
+
+# "sono" da solo va bene ("sono andato a Bobbio"); "sono di", "sono qua a" no
+SONO = {"sono", "siamo", "sei"}
+DOPO_SONO = {"di", "del", "della", "dei", "degli", "delle", "da", "dal", "dalla", "qua", "qui", "originario"}
+
+
+def dice_dove_abita(prima):
+    """Vero se le parole che precedono il posto dicono dove abita chi scrive."""
+    prima = [w.strip("'") for w in prima]   # "qua'" come "qua"
+    if any(w in DOVE_ABITA for w in prima):
+        return True
+    return any(a in SONO and b in DOPO_SONO for a, b in zip(prima, prima[1:]))
 
 # Nomi di posto che sono anche parole comuni o troppo generici
 COMUNI = set("""
@@ -100,12 +136,18 @@ romania olanda francia spagna germania svizzera austria slovenia croazia polonia
 america canada brasile argentina inghilterra belgio grecia albania serbia bosnia ungheria portogallo
 svezia norvegia finlandia scozia irlanda cina giappone india turchia marocco egitto australia messico
 washington florida california texas london londra parigi
-salvini bolognesi marin falco cecchetto ceppo caldara
+salvini bolognesi marin falco cecchetto ceppo caldara tula cecilia
+bolletta bollette balletta ballette
+bavaria carolina bulgaria biancaneve campione senato fallo viminale cibali candide veneziano""".split()) | {
+    "polo nord", "cappello di paglia", "quartiere residenziale", "piano di sopra", "palazzo vecchio",
+    "forze armate", "monte viminale", "re di coppe", "bosco grande", "bosco piccolo", "terra nera",
+    "porto fuori", "campione d'italia"} | set("""
 """.split()) | {"parco pubblico"} | set("""
-""".split()) | {"mio caro", "via di mezzo", "pianura padana", "gran bosco", "casa del bosco"}
+""".split()) | {"mio caro", "via di mezzo", "pianura padana", "gran bosco", "casa del bosco", "acqua dolce", "boschi vecchi"}
 
 # Inizi di frasi comuni che a volte sono anche toponimi ("Casa Pasquale", "Via di Mezzo")
-INIZI_GENERICI = ("casa ", "via ", "mio ", "mia ", "centro ", "case ")
+INIZI_GENERICI = ("casa ", "via ", "mio ", "mia ", "centro ", "case ", "al ", "allo ", "alla ", "ai ", "agli ",
+                  "alle ", "dal ", "dalla ", "nel ", "nella ")
 
 # Indizi di luogo: un nome di una sola parola conta solo se una di queste
 # parole lo precede da vicino ("nei boschi di Viggiano", "zona Bardi", "a Bobbio")
@@ -268,6 +310,10 @@ def toponimi():
     for chiave, voci in candidati.items():
         if chiave in COMUNI or len(chiave) < 5 or chiave.startswith(INIZI_VIETATI):
             continue
+        # Nomi fatti solo di parole cortissime ("tu la", nome alternativo di Tula)
+        # sono pezzi di frase: "tu la bolletta..."
+        if all(len(w) <= 3 for w in chiave.replace("'", " ").split()):
+            continue
         # Scarta i nomi ambigui: omonimi lontani fra loro (anche fuori dalle nostre aree,
         # altrimenti "Gualdo" potrebbe essere un altro Gualdo d'Italia)
         lontani = any(distanza_km((a[1], a[2]), (b[1], b[2])) > DISTANZA_AMBIGUA_KM
@@ -317,18 +363,22 @@ def testi():
         if RUMORE.search(contesto):
             continue   # video su sagre o ricette: niente posti da qui
         url = f"https://www.youtube.com/watch?v={vid}"
-        yield ("youtube", vid, url, v["data"], contesto, bool(FUNGHI.search(contesto)))
+        yield ("youtube", vid, url, v["data"], contesto, parla_di_funghi(contesto))
         for c in commenti_yt.get(vid, []):
-            yield ("youtube", vid, url, c["data"], c["testo"], bool(FUNGHI.search(contesto)))
+            yield ("youtube", vid, url, c["data"], c["testo"], parla_di_funghi(contesto))
     post = json.loads((CARTELLA / "reddit_post.json").read_text(encoding="utf-8")) if (CARTELLA / "reddit_post.json").exists() else {}
     commenti_rd = json.loads((CARTELLA / "reddit_commenti.json").read_text(encoding="utf-8")) if (CARTELLA / "reddit_commenti.json").exists() else {}
     for pid, p in post.items():
         contesto = html.unescape(f"{p['titolo']} {p['testo']}")
         if RUMORE.search(contesto):
             continue
-        yield ("reddit", pid, p["url"], p["data"], contesto, bool(FUNGHI.search(contesto)))
+        # Su Reddit i thread generici (r/italy) nominano i funghi da qualche parte nel
+        # testo: il post vale come contesto solo se ne parla il titolo, e ogni
+        # commento deve parlarne lui stesso
+        titolo = html.unescape(p["titolo"])
+        yield ("reddit", pid, p["url"], p["data"], contesto, parla_di_funghi(titolo))
         for c in commenti_rd.get(pid, []):
-            yield ("reddit", pid, p["url"], c["data"], c["testo"], bool(FUNGHI.search(contesto)))
+            yield ("reddit", pid, p["url"], c["data"], c["testo"], False)
 
 
 def parole(testo):
@@ -353,14 +403,21 @@ class Cercatore:
         self.massimo = max((k.count(" ") + 1 for k in self.per_parole), default=1)
 
     def trova(self, testo):
-        """Coppie (chiave, vero se una delle due parole prima è un indizio di luogo)."""
+        """Terne (chiave, indizio di luogo nelle due parole prima, "dove abita" nelle quattro prima)."""
         p = parole(testo)
         trovati, i = [], 0
         while i < len(p):
             for n in range(min(self.massimo, len(p) - i), 0, -1):
                 chiave = self.per_parole.get(" ".join(p[i:i + n]))
                 if chiave:
-                    trovati.append((chiave, any(w in INDIZI_LUOGO for w in p[max(0, i - 2):i])))
+                    # Una parola sola dopo "monte", "val"... o prima di "di" è un pezzo di un nome
+                    # più lungo che non conosciamo ("Monte Acuto" non è il comune di Acuto,
+                    # "Cornate di Gerfalco" non è Cornate d'Adda)
+                    pezzo = n == 1 and ((i > 0 and p[i - 1] in PRIMA_DI_UN_NOME)
+                                        or (i + 1 < len(p) and p[i + 1] in ("di", "del", "della", "dei", "d")))
+                    if not pezzo:
+                        trovati.append((chiave, any(w in INDIZI_LUOGO for w in p[max(0, i - 2):i]),
+                                        dice_dove_abita(p[max(0, i - 4):i])))
                     i += n
                     break
             else:
@@ -391,11 +448,13 @@ def main():
     for piattaforma, fonte, url, data, testo, contesto_funghi in testi():
         letti += 1
         testo = html.unescape(testo)
-        if not (contesto_funghi or FUNGHI.search(testo)) or RUMORE.search(testo):
+        if not (contesto_funghi or parla_di_funghi(testo)) or RUMORE.search(testo):
             continue
         in_tema += 1
         trovati = set()
-        for chiave, indizio in cercatore.trova(testo):
+        for chiave, indizio, abita in cercatore.trova(testo):
+            if abita:   # dove abita o da dove saluta chi scrive
+                continue
             if chiave in ZONE_AMPIE:
                 trovati.add(chiave)
                 continue
@@ -425,7 +484,7 @@ def main():
                 if rx.search(testo):
                     p["specie"][specie] += 1
             # Candidato estratto: meglio se il testo stesso parla di funghi
-            p["estratti"].append((bool(FUNGHI.search(testo)), data, piattaforma, url, estratto(testo, chiave)))
+            p["estratti"].append((parla_di_funghi(testo), data, piattaforma, url, estratto(testo, chiave)))
 
     uscita = []
     for chiave, p in posti.items():
