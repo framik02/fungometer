@@ -79,7 +79,7 @@ RUMORE = re.compile(
     r"|\bmort[oaie]\b|dispers[oaie]\b|salvataggio|soccors|scompars|cordoglio|tragedi|intossica|avvelenat|malore"
     r"|funeral|sanzion|vendevan|\bfest[ae]\b|\btel\b\.?\s*\[?\d|gusto a casa tua"
     r"|\bmuor[eio]|aggredis|aggression|killer|\bsuina\b|\bmen[uù]\b|trattoria|osteria"
-    r"|appuntament|concert|polenta|pappardell|ballett|bike park",
+    r"|appuntament|concert|polenta|pappardell|ballett|bike park|festival|bancarell",
     re.I)
 
 # Chi dice dove abita o da dove saluta non sta dicendo dove trova funghi:
