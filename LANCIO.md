@@ -2,7 +2,7 @@
 
 Aggiornato il 6 ottobre 2026. Budget: 100 € iniziali, fino a 30 €/mese.
 
-**Aggiornamento successivo:** l'utente ha scelto l'indirizzo gratuito workers.dev e autorizzato «Accedi con Google». [ACCESSO-GOOGLE.md](ACCESSO-GOOGLE.md) sostituisce i passaggi dominio/Resend/Turnstile di questo piano. Il codice comprende 37 test web; l'accesso Google reale richiede il completamento del client nella console.
+**Aggiornamento successivo:** l'utente ha scelto l'indirizzo gratuito workers.dev e autorizzato «Accedi con Google». [ACCESSO-GOOGLE.md](ACCESSO-GOOGLE.md) sostituisce i passaggi dominio/Resend/Turnstile di questo piano. Il codice comprende 37 test web superati. Client Google creato, segreto salvato in Cloudflare, contatto pubblico fungometer@gmail.com: il sito verifica la presenza della configurazione. Restano collaudo OAuth reale e completamento delle informative; registrazioni e pagamenti reali disabilitati.
 
 ## Stato verificato
 
