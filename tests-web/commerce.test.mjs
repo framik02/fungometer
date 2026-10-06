@@ -139,3 +139,40 @@ test('optional analytics starts off and revocation removes events',async()=>{
 test('expired session cannot access map even with a valid pass',async()=>{
  const cookie=await login();await pay(cookie);await hook();db.prepare('UPDATE sessions SET expires_at=?').run(Date.now()-1);assert.equal((await req('/data/celle.json',undefined,cookie)).status,403);
 });
+function configurePublicEmail(){
+ Object.assign(env,{APP_ENV:'staging',TURNSTILE_SECRET_KEY:'test-turnstile',RESEND_API_KEY:'test-resend',MAIL_FROM:'FungoMeter <accesso@mail.example.test>',SUPPORT_EMAIL:'support@example.test'});
+}
+test('public email login sends via provider and never returns the code',async()=>{
+ configurePublicEmail();let mail,headers;
+ globalThis.fetch=async(url,options)=>{
+  if(String(url).includes('turnstile'))return Response.json({success:true,hostname:'127.0.0.1',action:'login'});
+  mail=JSON.parse(options.body);headers=options.headers;return Response.json({id:'email_test'});
+ };
+ const response=await req('/api/auth/request',{email:'tester@example.test',turnstileToken:'test-token'});
+ assert.equal(response.status,200);const result=await response.json();assert.equal(result.localCode,undefined);
+ assert.deepEqual(mail.to,['tester@example.test']);assert.equal(mail.reply_to,'support@example.test');
+ assert.equal(headers['Idempotency-Key'],`login/${result.id}`);
+ const code=mail.text.match(/\b\d{6}\b/)[0];assert.equal((await req('/api/auth/verify',{id:result.id,code})).status,200);
+});
+test('wrong Turnstile hostname or action prevents email sending',async()=>{
+ configurePublicEmail();let sends=0;
+ for(const mismatch of [{hostname:'evil.test',action:'login'},{hostname:'127.0.0.1',action:'other'}]){
+  globalThis.fetch=async url=>{if(String(url).includes('turnstile'))return Response.json({success:true,...mismatch});sends++;return Response.json({id:'unexpected'});};
+  assert.equal((await req('/api/auth/request',{email:'tester@example.test',turnstileToken:'test-token'})).status,400);
+ }
+ assert.equal(sends,0);assert.equal(db.prepare('SELECT COUNT(*) n FROM login_codes').get().n,0);
+});
+test('shared email budget stops the 81st send even across different addresses and IPs',async()=>{
+ configurePublicEmail();let sends=0;
+ globalThis.fetch=async url=>{if(String(url).includes('turnstile'))return Response.json({success:true,hostname:'127.0.0.1',action:'login'});sends++;return Response.json({id:'email_test'});};
+ for(let i=0;i<81;i++){
+  const response=await req('/api/auth/request',{email:`tester${i}@example.test`,turnstileToken:'test-token'},undefined,{'CF-Connecting-IP':`192.0.2.${i+1}`});
+  assert.equal(response.status,i<80?200:429);
+ }
+ assert.equal(sends,80);
+});
+test('provider rejection removes the unusable login challenge',async()=>{
+ configurePublicEmail();globalThis.fetch=async url=>String(url).includes('turnstile')?Response.json({success:true,hostname:'127.0.0.1',action:'login'}):Response.json({error:'rejected'},{status:422});
+ const response=await req('/api/auth/request',{email:'tester@example.test',turnstileToken:'test-token'});
+ assert.equal(response.status,503);assert.equal(db.prepare('SELECT COUNT(*) n FROM login_codes').get().n,0);
+});

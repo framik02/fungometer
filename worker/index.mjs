@@ -120,12 +120,16 @@ async function api(request,env,path) {
       const check=await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify',{method:'POST',body:new URLSearchParams({secret:env.TURNSTILE_SECRET_KEY,response:String(input.turnstileToken||'')})});
       const result=await check.json();
       if(!result.success || result.hostname!==new URL(env.APP_ORIGIN).hostname || result.action!=='login') fail(400,'Completa la verifica antispam.');
+      // Keep room below Resend's free 100/day and 3,000/month quotas.
+      // This budget is shared by all login addresses and cannot be reset by
+      // changing IP or email. Count attempted sends conservatively.
+      await limit(env,'mail:daily',80,DAY);
     }
     const id=crypto.randomUUID();
     const code=String(crypto.getRandomValues(new Uint32Array(1))[0]%1000000).padStart(6,'0');
     await stmt(env,'INSERT INTO login_codes(id,email,code_hash,expires_at) VALUES(?,?,?,?)',id,email,await hmac(env.AUTH_SECRET,`${id}:${email}:${code}`),Date.now()+10*60000).run();
     if(isLocal(request,env)) return json({id,localCode:code});
-    const sent=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:env.MAIL_FROM,to:[email],subject:'Il tuo codice di accesso FungoMeter',text:`Il tuo codice è ${code}. Scade fra 10 minuti. Se non hai richiesto l’accesso, ignora questa email. Non condividerlo con nessuno.`})});
+    const sent=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${env.RESEND_API_KEY}`,'Content-Type':'application/json','Idempotency-Key':`login/${id}`},body:JSON.stringify({from:env.MAIL_FROM,to:[email],...(env.SUPPORT_EMAIL?{reply_to:env.SUPPORT_EMAIL}:{}),subject:'Il tuo codice di accesso FungoMeter',text:`Il tuo codice è ${code}. Scade fra 10 minuti. Se non hai richiesto l’accesso, ignora questa email. Non condividerlo con nessuno.`})});
     if(!sent.ok) { await stmt(env,'DELETE FROM login_codes WHERE id=?',id).run(); fail(503,'Invio email non riuscito. Riprova più tardi.'); }
     return json({id});
   }
