@@ -373,6 +373,11 @@ async function caricaJson(percorso) {
 }
 
 async function avvia() {
+  await window.FungoCommerce.ready;
+  if (!window.FungoCommerce.active) {
+    window.location.replace('account.html?prova=1');
+    return;
+  }
   preparaMappa();
   preparaAvvertenze();
 
@@ -417,7 +422,7 @@ async function avvia() {
 
   // Prima inquadratura: l'ultima area scelta, altrimenti tutte e due
   const area = ricordato("area");
-  if (area === "italia" && stato.italia.panoramica) mappa.fitBounds(ITALIA);
+  if ((!area || area === "italia") && stato.italia.panoramica) mappa.fitBounds(ITALIA);
   else if (area && stato.aree[area]) vaiAllArea(area); else mappa.fitBounds(limitiDi(stato.celle));
   aggiornaStileZoom();
   ricolora();
@@ -427,6 +432,7 @@ async function avvia() {
     .then(() => { disegnaPreferiti(); disegnaSelezione(); segnaGiorniMigliori(); });
 
   document.getElementById("mia-posizione").addEventListener("click", trovaPosizione);
+  window.FungoCommerce.event('map_ready');
 }
 
 // ---------------------------------------------------------------------------
@@ -1859,6 +1865,7 @@ async function schedeDellaZona(zonaId) {
 }
 
 async function apriSchedaQuadrato(q) {
+  window.FungoCommerce.event('cell_open');
   const limiti = confiniQuadrato(q.area, q.R, q.C);
   const centro = L.latLngBounds(limiti).getCenter();
   if (stato.evidenziato) stato.evidenziato.remove();
@@ -2590,17 +2597,20 @@ async function accendiWeb() {
 }
 
 function schedaWeb(p) {
+  const urlFonte = value => {
+    try { const u=new URL(value); return u.protocol==='https:' && ['youtube.com','www.youtube.com','youtu.be','reddit.com','www.reddit.com'].includes(u.hostname) ? testoSicuro(u.href) : null; } catch { return null; }
+  };
   const specie = Object.keys(p.specie || {});
-  const link = p.link.map((l) => `<li><a href="${encodeURI(l.url)}" target="_blank" rel="noopener">${l.piattaforma === "youtube" ? "Video YouTube" : "Discussione Reddit"}</a> del ${testoSicuro(l.data)}</li>`).join("");
+  const link = (p.link || []).filter(l=>urlFonte(l.url)).map((l) => `<li><a href="${urlFonte(l.url)}" target="_blank" rel="noopener noreferrer">${l.piattaforma === "youtube" ? "Video YouTube" : "Discussione Reddit"}</a> del ${testoSicuro(l.data)}</li>`).join("");
   const fonti = [p.youtube ? `${p.youtube} su YouTube` : "", p.reddit ? `${p.reddit} su Reddit` : ""].filter(Boolean).join(", ");
   return `<div class="scheda scheda-web">
       <h3>${testoSicuro(p.nome)}</h3>
       <div class="zona">${p.tipo === "zona" ? "Zona ampia" : "Posto"} citato da ${p.fonti} fonti (${fonti})</div>
       ${specie.length ? `<p>Specie nominate: ${specie.map(testoSicuro).join(", ")}</p>` : ""}
       <p>Ultima citazione: ${testoSicuro(p.ultima)}</p>
-      ${(p.estratti || []).map((e) => `<blockquote class="estratto-web">“${testoSicuro(e.testo)}”
+      ${(p.estratti || []).filter(e=>urlFonte(e.url)).map((e) => `<blockquote class="estratto-web">“${testoSicuro(e.testo)}”
         <span>${e.piattaforma === "youtube" ? "YouTube" : "Reddit"}, ${testoSicuro(e.data)} ·
-        <a href="${encodeURI(e.url)}" target="_blank" rel="noopener">fonte</a></span></blockquote>`).join("")}
+        <a href="${urlFonte(e.url)}" target="_blank" rel="noopener noreferrer">Apri la fonte originale</a></span></blockquote>`).join("")}
       <ul class="fonti-web">${link}</ul>
       <p class="avviso-web">Trovato nei commenti pubblici che parlano di funghi. Una citazione non garantisce niente: può essere vecchia, sbagliata o negativa. Rispetta proprietà private e regole delle aree protette.</p>
     </div>`;

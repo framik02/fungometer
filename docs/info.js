@@ -20,7 +20,7 @@ function intervalloMesi(mesi) {
 async function riempiTabella() {
   const corpo = document.getElementById("tabella-specie");
   try {
-    const risposta = await fetch("data/punteggi.json", { cache: "no-cache" });
+    const risposta = await fetch("/api/species", { cache: "no-cache" });
     const dati = await risposta.json();
 
     corpo.innerHTML = dati.specie.map((sp) => {

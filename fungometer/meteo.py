@@ -18,7 +18,8 @@ l'altro si aspetta qualche secondo.
 """
 
 import time
-from datetime import date
+import os
+from datetime import date as calendar_date
 
 import requests
 
@@ -96,7 +97,7 @@ def _chiedi(url, parametri, tentativi=6):
                 time.sleep(60)
                 continue
             if 400 <= risposta.status_code < 500:
-                raise ValueError(f"Richiesta rifiutata da Open-Meteo: {risposta.text[:300]}")
+                raise ValueError(f"Richiesta rifiutata da Open-Meteo: HTTP {risposta.status_code}")
             risposta.raise_for_status()
             dati = risposta.json()
             # Con una sola località Open-Meteo restituisce un dizionario,
@@ -105,7 +106,7 @@ def _chiedi(url, parametri, tentativi=6):
         except requests.RequestException as errore:
             attesa = 5 * tentativo
             # Solo l'inizio del messaggio: l'indirizzo completo è lunghissimo
-            print(f"  errore di rete ({str(errore).split(' for url')[0][:120]}), riprovo fra {attesa} s")
+            print(f"  errore di rete ({type(errore).__name__}), riprovo fra {attesa} s")
             time.sleep(attesa)
     raise RuntimeError(f"Open-Meteo non risponde dopo {tentativi} tentativi")
 
@@ -124,6 +125,11 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
     """
     storico = start_date is not None
     url = URL_STORICO if storico else URL_PREVISIONI
+    api_key = os.environ.get("OPEN_METEO_API_KEY", "").strip()
+    if os.environ.get("COMMERCIAL_MODE") == "true" and not api_key:
+        raise RuntimeError("Imposta OPEN_METEO_API_KEY con una licenza commerciale prima di aggiornare il prodotto commerciale.")
+    if api_key:
+        url = url.replace("https://", "https://customer-", 1)
 
     date = None
     meteo_per_cella = {}
@@ -144,9 +150,11 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
             parametri.update(start_date=start_date, end_date=end_date)
         else:
             parametri.update(past_days=past_days, forecast_days=forecast_days)
+        if api_key:
+            parametri["apikey"] = api_key
 
         if storico:
-            giorni = (date.fromisoformat(end_date) - date.fromisoformat(start_date)).days + 1
+            giorni = (calendar_date.fromisoformat(end_date) - calendar_date.fromisoformat(start_date)).days + 1
         else:
             giorni = past_days + forecast_days
         _aspetta_il_tetto(_costo(len(lotto), giorni, len(VARIABILI)))

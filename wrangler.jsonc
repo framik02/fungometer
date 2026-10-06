@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fungometer",
+  "account_id": "a674a0f074b8c389ad40bf022c6bbd74",
+  "main": "worker/index.mjs",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none" },
+  "d1_databases": [{ "binding": "DB", "database_name": "fungometer", "database_id": "6712493b-b834-4830-a975-1423f888f562", "migrations_dir": "migrations" }],
+  "vars": {
+    "APP_ENV": "staging", "APP_ORIGIN": "https://fungometer.chiarolanza-francesco.workers.dev",
+    "PAYMENTS_MODE": "test", "LIVE_SALES_READY": "false",
+    "AUTH_ENABLED": "false", "TURNSTILE_SITE_KEY": "",
+    "SELLER_NAME": "", "SUPPORT_EMAIL": "", "SELLER_ADDRESS": "", "SELLER_TAX_ID": "",
+    "MAIL_FROM": "", "LICENSES_READY": "false", "PRIVATE_DATA_READY": "false"
+  },
+  "triggers": { "crons": ["23 3 * * *"] },
+  "observability": { "enabled": false }
+}
