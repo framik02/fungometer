@@ -4,11 +4,12 @@
 # lavoro dura circa un'ora e un quarto, per stare sotto le 5.000 chiamate
 # all'ora di Open-Meteo, e i dati nuovi sono pronti prima delle 6.
 #
-# Il cron di GitHub usa l'ora UTC e non conosce l'ora legale:
-#   02:17 UTC = 04:17 in Italia d'estate (CEST)
-#   03:17 UTC = 04:17 in Italia d'inverno (CET)
-# Quindi partiamo a entrambi gli orari e lo script, con --controlla-ora,
-# lavora solo se in Italia sono passate le 4 e oggi non l'ha ancora fatto.
+# GitHub fa partire i lavori programmati con molto ritardo (a ottobre 2026
+# quelli delle 4:15 partivano verso le 11). Per questo il lavoro è programmato
+# ogni ora dalle 22:17 alle 3:17 UTC (da mezzanotte alle 5 circa in Italia):
+# con --controlla-ora lo script lavora solo se in Italia sono passate le 4 e
+# oggi non l'ha ancora fatto, altrimenti esce in pochi secondi senza chiedere
+# niente a Open-Meteo. Così basta che una partenza arrivi dopo le 4.
 # Il minuto 17 evita il picco di carico all’inizio dell’ora su GitHub Actions.
 # GitHub a volte avvia i cron con qualche decina di minuti di ritardo: è normale.
 #
@@ -18,8 +19,7 @@ name: Aggiorna punteggi
 
 on:
   schedule:
-    - cron: "17 2 * * *"
-    - cron: "17 3 * * *"
+    - cron: "17 22,23,0,1,2,3 * * *"
   workflow_dispatch:
 
 # Serve per fare il commit del nuovo punteggi.json
