@@ -3,15 +3,40 @@ on:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
+    inputs:
+      verify_only:
+        description: 'Verifica codice e build senza usare credenziali o pubblicare'
+        type: boolean
+        default: true
 permissions:
   contents: read
 concurrency:
   group: cloudflare-production
   cancel-in-progress: false
 jobs:
+  verifica:
+    if: github.event_name == 'workflow_dispatch' && inputs.verify_only
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: pip install -r requirements.txt pytest
+      - run: npm ci
+      - run: python -m pytest -q
+      - run: npm test
+      - run: npm run check:deploy
+      - run: npm run build
   aggiorna:
     # Activate only after credentials and licence are configured.
-    if: vars.CLOUDFLARE_PIPELINE_READY == 'true'
+    if: vars.CLOUDFLARE_PIPELINE_READY == 'true' && (github.event_name == 'schedule' || !inputs.verify_only)
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
@@ -35,6 +60,7 @@ jobs:
           test -n "$OPEN_METEO_API_KEY"
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
+          node scripts/check-deploy.mjs
       - run: pip install -r requirements.txt pytest
       - run: npm ci
       - run: python -m pytest -q
@@ -42,9 +68,11 @@ jobs:
         run: python scripts/aggiorna_punteggi.py
       - name: Verifica freschezza prima della pubblicazione
         run: node scripts/check-data.mjs
-      - name: Aggiorna database
-        run: npx wrangler d1 migrations apply fungometer --remote
+      # Le migrazioni sono un intervento di rilascio, non un lavoro quotidiano.
+      # Non servono permessi di modifica D1 per aggiornare il meteo.
       - name: Pubblica codice e dati protetti
         run: npm run deploy
+      - name: Verifica sito pubblicato
+        run: node scripts/smoke-staging.mjs
       # No commits, public artifacts or forecast caches: newly generated data
       # goes directly into Worker assets, protected by the access check.

@@ -18,6 +18,7 @@ l'altro si aspetta qualche secondo.
 """
 
 import time
+import math
 import os
 from datetime import date as calendar_date
 
@@ -157,7 +158,10 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
             giorni = (calendar_date.fromisoformat(end_date) - calendar_date.fromisoformat(start_date)).days + 1
         else:
             giorni = past_days + forecast_days
-        _aspetta_il_tetto(_costo(len(lotto), giorni, len(VARIABILI)))
+        # Gli endpoint commerciali non hanno il limite orario del servizio
+        # gratuito. Manteniamo lotti piccoli, timeout e retry anche con chiave.
+        if not api_key:
+            _aspetta_il_tetto(_costo(len(lotto), giorni, len(VARIABILI)))
         partenza = time.monotonic()
         risultati = _chiedi(url, parametri)
         durata = time.monotonic() - partenza
@@ -166,8 +170,20 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
 
         for cella, risultato in zip(lotto, risultati):
             giornaliero = risultato["daily"]
+            tempi = giornaliero.get("time", [])
+            if len(tempi) != giorni or len(set(tempi)) != giorni:
+                raise RuntimeError("Open-Meteo ha restituito un calendario incompleto")
             if date is None:
-                date = giornaliero["time"]
+                date = tempi
+            if tempi != date:
+                raise RuntimeError("Open-Meteo ha restituito calendari diversi fra località")
+            for nome in VARIABILI:
+                valori = giornaliero.get(nome)
+                if not isinstance(valori, list) or len(valori) != giorni or any(
+                    not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v)
+                    for v in valori
+                ):
+                    raise RuntimeError(f"Open-Meteo ha restituito dati incompleti: {nome}")
             meteo_per_cella[cella["id"]] = {
                 corto: giornaliero.get(lungo) or [None] * len(date)
                 for lungo, corto in VARIABILI.items()
@@ -175,6 +191,6 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
 
         print(f"  meteo: lotto {n}/{len(lotti)} in {durata:.1f} s")
         if n < len(lotti):
-            time.sleep(PAUSA_FRA_LOTTI)
+            time.sleep(0.25 if api_key else PAUSA_FRA_LOTTI)
 
     return date, meteo_per_cella
