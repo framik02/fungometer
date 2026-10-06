@@ -14,6 +14,7 @@ window.FungoCommerce = (() => {
   function render(){
     const notice=$('mode-notice');
     if(notice){notice.hidden=state.authEnabled&&!state.authRestricted&&state.paymentsMode==='live'&&state.paymentsReady;notice.textContent=!state.authEnabled?'Anteprima in preparazione: registrazioni e acquisti non ancora aperti.':state.authRestricted?'Collaudo riservato al gestore. Le registrazioni pubbliche e gli acquisti non sono ancora aperti.':state.paymentsMode==='test'?'Versione di prova: gli acquisti reali non sono attivi. Eventuali pagamenti Stripe sono soltanto simulazioni.':'Gli acquisti non sono ancora disponibili.';}
+    if(notice&&state.authRestricted&&state.paymentsReady&&state.paymentsMode==='test')notice.textContent='Collaudo riservato al gestore. I pagamenti sono simulati: nessun addebito reale. Le registrazioni pubbliche sono chiuse.';
     if($('login-form')){
       const google=state.authProvider==='google';
       $('google-panel').hidden=!google||Boolean(state.user);$('google-login').disabled=!state.authEnabled||!state.googleReady;
@@ -28,7 +29,10 @@ window.FungoCommerce = (() => {
         $('open-map').textContent=state.access.active?'Esplora la tua zona':'Apri la mappa';
       }else if(!state.authEnabled){$('login-form').querySelector('button').disabled=true;status(google?'Stiamo completando il collegamento con Google. L’accesso sarà disponibile qui.':'Stiamo preparando l’accesso via email. Riprova quando la configurazione sarà completata.');}
     }
-    document.querySelectorAll('.buy').forEach(button=>{button.disabled=!state.paymentsReady;});
+    document.querySelectorAll('.buy').forEach(button=>{button.disabled=!state.paymentsReady;if(state.paymentsMode==='test')button.textContent=button.dataset.plan==='season'?'Simula 90 giorni':'Simula 12 mesi';});
+    if(state.paymentsMode==='test'&&state.paymentsReady&&$('purchase-terms')){
+      $('purchase-terms').nextElementSibling.textContent='Confermo che questo è un pagamento simulato per il collaudo: nessun acquisto reale e nessun addebito. Userò soltanto una carta di test Stripe.';
+    }
     if($('purchase-consent')) $('purchase-consent').hidden=!state.user||!state.paymentsReady;
     if($('commerce-banner')){
       $('commerce-banner').replaceChildren();

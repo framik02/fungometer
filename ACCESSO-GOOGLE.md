@@ -16,7 +16,7 @@ Branding salvato con home page, privacy e condizioni sul dominio gratuito, e `fu
 
 Deploy `4f38a78c-0451-412a-b505-86483873aae7`: `AUTH_ENABLED=true`, `AUTH_ACCESS=owner-test`, provider Google, pagamenti test non configurati. Il server accetta soltanto l’email Google verificata uguale a `SUPPORT_EMAIL` (fungometer@gmail.com). Controllo prima di creare l’account e a ogni lettura di sessione; email OTP non utilizzabile per aggirarlo. Modalità sconosciuta, gestore assente o pagamenti live impediscono l’accesso di collaudo. Disabilitare `AUTH_ENABLED` rende inutilizzabili anche le sessioni esistenti.
 
-42 test web superati e controllo remoto: pagine online, dati protetti, identità corretta, pagamenti disabilitati. Login Google reale, uscita e secondo accesso completati nel browser: account riconosciuto, prova non ancora avviata, misurazione facoltativa disattivata. Scheda account lasciata aperta al gestore per leggere le condizioni e attivare personalmente la prova. La schermata Google mostra il sottodominio Cloudflare, non ancora il brand verificato.
+46 test web superati e controllo remoto: pagine online, dati protetti, identità corretta, pagamenti disabilitati. Login Google reale, uscita e secondo accesso completati nel browser: account riconosciuto, misurazione facoltativa disattivata. Prova poi attivata personalmente dal gestore, verificata online fino al 13 ottobre 2026 ore 17:35; ricerca e dettaglio mappa verificati. La schermata Google mostra il sottodominio Cloudflare, non ancora il brand verificato.
 
 Il collaudo del solo gestore non equivale all’apertura pubblica: le bozze legali restano un blocco per `AUTH_ACCESS=public`. Prima di estenderlo a utenti esterni completare informative e condizioni, gestione dei dati e licenze. Non usare la modalità riservata per aggirare questi passaggi.
 
@@ -42,6 +42,6 @@ La configurazione locale è distinta dalla pubblica. Per il vecchio accesso emai
 
 ## Prima di abilitare al pubblico
 
-Completare informativa e condizioni della prova, verificare avvio prova nel browser e collegare aggiornamento meteo/licenza. Client, consenso, login reale e disconnessione Google verificati. Stripe rimane in test.
+Completare informativa e condizioni della prova, collegare aggiornamento meteo/licenza. Client, consenso, login reale e disconnessione Google verificati. Stripe rimane in test; checkout e rimborso simulati verificati, vedi [STRIPE-COLLAUDO.md](STRIPE-COLLAUDO.md).
 
 Fonti tecniche: [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect), [stati di pubblicazione e ambiti di identità](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview), [libreria jose](https://github.com/panva/jose).

@@ -127,6 +127,41 @@ test('refund arriving before completion prevents grant',async()=>{
 test('live key cannot be used accidentally in test mode',async()=>{
  const cookie=await login();env.STRIPE_SECRET_KEY='sk_live_wrong';assert.equal((await req('/api/checkout',{plan:'season',termsVersion:TERMS_VERSION,immediateAccess:true},cookie)).status,503);
 });
+
+test('restricted Stripe test keys work while live and publishable keys remain rejected',async()=>{
+ for(const key of ['sk_test_fake','rk_test_fake']){
+  env.STRIPE_SECRET_KEY=key;assert.equal((await(await req('/api/me')).json()).paymentsReady,true);
+ }
+ for(const key of ['sk_live_fake','rk_live_fake','pk_test_fake']){
+  env.STRIPE_SECRET_KEY=key;assert.equal((await(await req('/api/me')).json()).paymentsReady,false);
+ }
+});
+
+test('temporary sandbox key requires owner-only access and a future sandbox expiry',async()=>{
+ env.STRIPE_SECRET_KEY='rkcs_test_fake';assert.equal((await(await req('/api/me')).json()).paymentsReady,false);
+ env.AUTH_ACCESS='owner-test';assert.equal((await(await req('/api/me')).json()).paymentsReady,false);
+ env.STRIPE_TEST_EXPIRES_AT=new Date(Date.now()+DAY).toISOString();assert.equal((await(await req('/api/me')).json()).paymentsReady,true);
+ env.STRIPE_TEST_EXPIRES_AT=new Date(Date.now()-DAY).toISOString();assert.equal((await(await req('/api/me')).json()).paymentsReady,false);
+ env.STRIPE_TEST_EXPIRES_AT='invalid';assert.equal((await(await req('/api/me')).json()).paymentsReady,false);
+ env.STRIPE_TEST_EXPIRES_AT=new Date(Date.now()+DAY).toISOString();env.AUTH_ACCESS='public';assert.equal((await(await req('/api/me')).json()).paymentsReady,false);
+ env.AUTH_ACCESS='owner-test';env.PAYMENTS_MODE='live';assert.equal((await(await req('/api/me')).json()).paymentsReady,false);
+});
+
+test('a simulated pass never grants access after switching to live payments',async()=>{
+ const cookie=await login();await pay(cookie);await hook();
+ assert.equal((await(await req('/api/me',undefined,cookie)).json()).access.kind,'paid');
+ env.PAYMENTS_MODE='live';assert.equal((await(await req('/api/me',undefined,cookie)).json()).access.active,false);
+ assert.equal((await req('/data/celle.json',undefined,cookie)).status,403);
+});
+
+test('pass duration never stacks on orders from the other payment environment',async()=>{
+ const cookie=await login();await pay(cookie);await hook();
+ const distant=Date.now()+365*DAY;
+ db.prepare("UPDATE orders SET mode='live',access_end=?,session_id='cs_other',payment_intent='pi_other'").run(distant);
+ await pay(cookie);const before=Date.now();await hook();
+ const order=db.prepare("SELECT * FROM orders WHERE mode='test'").get();
+ assert.ok(order.access_start>=before&&order.access_start<distant);assert.equal(order.access_end-order.access_start,90*DAY);
+});
 test('invalid or old webhook signature is rejected',async()=>{
  const raw='{}',t=Math.floor(Date.now()/1000)-600;assert.equal(await verifyStripeSignature(raw,`t=${t},v1=${await hmac('secret',`${t}.${raw}`)}`,'secret'),false);
  const result=await worker.fetch(new Request(origin+'/api/stripe/webhook',{method:'POST',body:raw,headers:{'stripe-signature':'bad'}}),env);assert.equal(result.status,400);

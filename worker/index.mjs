@@ -22,7 +22,7 @@ async function identity(request,env) {
   return user&&authAccessAllowed(env,user.email)?user:null;
 }
 async function access(user,env) {
-  const paid = user ? await stmt(env,'SELECT MAX(access_end) AS until FROM orders WHERE user_id=? AND revoked=0 AND paid_at IS NOT NULL',user.id).first() : null;
+  const paid = user ? await stmt(env,'SELECT MAX(access_end) AS until FROM orders WHERE user_id=? AND mode=? AND revoked=0 AND paid_at IS NOT NULL',user.id,env.PAYMENTS_MODE).first() : null;
   return entitlement(user,paid?.until);
 }
 async function limit(env,key,max,windowMs) {
@@ -33,7 +33,11 @@ async function limit(env,key,max,windowMs) {
 }
 function paymentsReady(env) {
   const mode=env.PAYMENTS_MODE;
-  if(!['test','live'].includes(mode) || !env.STRIPE_SECRET_KEY?.startsWith(`sk_${mode}_`) || !env.STRIPE_WEBHOOK_SECRET) return false;
+  const key=env.STRIPE_SECRET_KEY||'';
+  if(!['test','live'].includes(mode) || !new RegExp(`^(?:sk|rk${mode==='test'?'|rkcs':''})_${mode}_[A-Za-z0-9]+$`).test(key) || !env.STRIPE_WEBHOOK_SECRET) return false;
+  // Temporary, claimable Stripe sandboxes are only for owner commissioning.
+  if(key.startsWith('rkcs_')&&(env.AUTH_ACCESS!=='owner-test'||!(Date.parse(env.STRIPE_TEST_EXPIRES_AT)>Date.now())))return false;
+  if(mode==='test'&&env.STRIPE_TEST_EXPIRES_AT&&!(Date.parse(env.STRIPE_TEST_EXPIRES_AT)>Date.now()))return false;
   return mode==='test' || (env.LIVE_SALES_READY==='true' && env.LICENSES_READY==='true' && env.PRIVATE_DATA_READY==='true'
     && env.SELLER_NAME && env.SELLER_ADDRESS && env.SELLER_TAX_ID && env.SUPPORT_EMAIL);
 }
@@ -65,9 +69,9 @@ async function applyPayment(session,env) {
   // webhook cannot extend access twice; concurrent purchases serialize in D1.
   const now=Date.now();
   await stmt(env,`UPDATE orders SET paid_at=?,payment_intent=?,
-    access_start=MAX(?,COALESCE((SELECT MAX(access_end) FROM orders WHERE user_id=? AND revoked=0 AND paid_at IS NOT NULL),0),COALESCE((SELECT trial_ends_at FROM users WHERE id=?),0)),
-    access_end=MAX(?,COALESCE((SELECT MAX(access_end) FROM orders WHERE user_id=? AND revoked=0 AND paid_at IS NOT NULL),0),COALESCE((SELECT trial_ends_at FROM users WHERE id=?),0))+days*?
-    WHERE id=? AND paid_at IS NULL AND revoked=0`,now,session.payment_intent,now,order.user_id,order.user_id,now,order.user_id,order.user_id,DAY,order.id).run();
+    access_start=MAX(?,COALESCE((SELECT MAX(access_end) FROM orders WHERE user_id=? AND mode=? AND revoked=0 AND paid_at IS NOT NULL),0),COALESCE((SELECT trial_ends_at FROM users WHERE id=?),0)),
+    access_end=MAX(?,COALESCE((SELECT MAX(access_end) FROM orders WHERE user_id=? AND mode=? AND revoked=0 AND paid_at IS NOT NULL),0),COALESCE((SELECT trial_ends_at FROM users WHERE id=?),0))+days*?
+    WHERE id=? AND paid_at IS NULL AND revoked=0`,now,session.payment_intent,now,order.user_id,order.mode,order.user_id,now,order.user_id,order.mode,order.user_id,DAY,order.id).run();
   const user=await stmt(env,'SELECT * FROM users WHERE id=?',order.user_id).first();
   await record(env,user,'purchase');
 }
