@@ -85,6 +85,24 @@ test('checkout amount comes from server and retries reuse session',async()=>{
  const cookie=await login();await pay(cookie);assert.equal(checkout.amount_total,990);await pay(cookie);assert.equal(db.prepare('SELECT COUNT(*) n FROM orders').get().n,1);
  assert.equal((await req('/api/checkout',{plan:'custom',amount:1,termsVersion:TERMS_VERSION,immediateAccess:true},cookie)).status,400);
 });
+test('owner test-account cutover replaces old pending Checkout links',async()=>{
+ const cookie=await login();await pay(cookie);const old=checkout.metadata.order_id;
+ db.prepare('UPDATE orders SET created_at=?,session_id=? WHERE id=?').run(Date.now()-10000,'cs_test_old_account',old);
+ env.STRIPE_TEST_RESET_BEFORE=new Date(Date.now()-5000).toISOString();
+ assert.equal((await pay(cookie)).status,200);
+ assert.equal(db.prepare('SELECT checkout_closed FROM orders WHERE id=?').get(old).checkout_closed,1);
+ assert.notEqual(checkout.metadata.order_id,old);
+ await pay(cookie);assert.equal(db.prepare('SELECT COUNT(*) n FROM orders WHERE checkout_closed=0').get().n,1);
+});
+test('test-account cutover leaves completed passes intact',async()=>{
+ const cookie=await login();await pay(cookie);await hook();const old=checkout.metadata.order_id;
+ db.prepare('UPDATE orders SET created_at=? WHERE id=?').run(Date.now()-10000,old);
+ env.STRIPE_TEST_RESET_BEFORE=new Date(Date.now()-5000).toISOString();
+ globalThis.fetch=async()=>Response.json({id:'cs_second',url:'https://checkout.stripe.com/c/pay/second'});
+ assert.equal((await pay(cookie)).status,200);
+ const paid=db.prepare('SELECT paid_at,revoked,checkout_closed FROM orders WHERE id=?').get(old);
+ assert.ok(paid.paid_at);assert.equal(paid.revoked,0);assert.equal(paid.checkout_closed,0);
+});
 test('return URL cannot activate paid access',async()=>{
  const cookie=await login();await pay(cookie);await req('/account.html?checkout=success',undefined,cookie);assert.equal((await(await req('/api/me',undefined,cookie)).json()).access.active,false);
 });

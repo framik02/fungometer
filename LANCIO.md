@@ -2,6 +2,8 @@
 
 Aggiornato il 6 ottobre 2026. Budget: 100 € iniziali, fino a 30 €/mese.
 
+**Stato Stripe aggiornato:** account del gestore collegato in test; pagamento, attivazione pass e rimborso verificati nel browser. Credenziali Cloudflare aggiornate, webhook già configurato (non duplicarlo), vecchio webhook temporaneo disabilitato e relativa scadenza tecnica rimossa. I punti 1–3 dell'ordine operativo sotto sono completati e conservati come riferimento storico. Vedere [collaudo aggiornato](STRIPE-COLLAUDO.md). Verifiche attuali: 48 test web e 53 test Python superati; sito pubblicato verificato. Registrazioni pubbliche e incassi reali restano disabilitati.
+
 **Aggiornamento successivo:** l'utente ha scelto l'indirizzo gratuito workers.dev e autorizzato «Accedi con Google». [ACCESSO-GOOGLE.md](ACCESSO-GOOGLE.md) sostituisce i passaggi dominio/Resend/Turnstile di questo piano. Il codice comprende 46 test web superati. Client Google creato, segreto salvato in Cloudflare, contatto pubblico fungometer@gmail.com: il sito verifica la presenza della configurazione. Accesso Google reale riuscito per il solo gestore, Francesco Chiarolanza, con contatto fungometer@gmail.com. Informative commerciali ancora da completare; registrazioni pubbliche e pagamenti reali disabilitati.
 
 ## Stato verificato

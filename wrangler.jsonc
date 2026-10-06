@@ -4,16 +4,46 @@
   "account_id": "a674a0f074b8c389ad40bf022c6bbd74",
   "main": "worker/index.mjs",
   "compatibility_date": "2026-10-01",
-  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none" },
-  "d1_databases": [{ "binding": "DB", "database_name": "fungometer", "database_id": "6712493b-b834-4830-a975-1423f888f562", "migrations_dir": "migrations" }],
-  "vars": {
-    "APP_ENV": "staging", "APP_ORIGIN": "https://fungometer.chiarolanza-francesco.workers.dev",
-    "PAYMENTS_MODE": "test", "LIVE_SALES_READY": "false",
-    "STRIPE_TEST_EXPIRES_AT": "2026-10-13T00:00:00Z",
-    "AUTH_ENABLED": "true", "AUTH_ACCESS": "owner-test", "AUTH_PROVIDER": "google", "GOOGLE_CLIENT_ID": "751296262314-2ie6p5ffcu8iodmpeek0g7csiqg2ahp8.apps.googleusercontent.com", "TURNSTILE_SITE_KEY": "",
-    "SELLER_NAME": "Francesco Chiarolanza", "SUPPORT_EMAIL": "fungometer@gmail.com", "SELLER_ADDRESS": "", "SELLER_TAX_ID": "",
-    "MAIL_FROM": "", "LICENSES_READY": "false", "PRIVATE_DATA_READY": "false"
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none"
   },
-  "triggers": { "crons": ["23 3 * * *"] },
-  "observability": { "enabled": false }
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fungometer",
+      "database_id": "6712493b-b834-4830-a975-1423f888f562",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "APP_ENV": "staging",
+    "APP_ORIGIN": "https://fungometer.chiarolanza-francesco.workers.dev",
+    "PAYMENTS_MODE": "test",
+    "LIVE_SALES_READY": "false",
+    "STRIPE_TEST_EXPIRES_AT": "",
+    "AUTH_ENABLED": "true",
+    "AUTH_ACCESS": "owner-test",
+    "AUTH_PROVIDER": "google",
+    "GOOGLE_CLIENT_ID": "751296262314-2ie6p5ffcu8iodmpeek0g7csiqg2ahp8.apps.googleusercontent.com",
+    "TURNSTILE_SITE_KEY": "",
+    "SELLER_NAME": "Francesco Chiarolanza",
+    "SUPPORT_EMAIL": "fungometer@gmail.com",
+    "SELLER_ADDRESS": "",
+    "SELLER_TAX_ID": "",
+    "MAIL_FROM": "",
+    "LICENSES_READY": "false",
+    "PRIVATE_DATA_READY": "false",
+    "STRIPE_TEST_RESET_BEFORE": "2026-10-06T16:49:00.316Z"
+  },
+  "triggers": {
+    "crons": [
+      "23 3 * * *"
+    ]
+  },
+  "observability": {
+    "enabled": false
+  }
 }

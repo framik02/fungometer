@@ -2,6 +2,7 @@ import {readFile} from 'node:fs/promises';
 import {normalizeEmail} from '../worker/core.mjs';
 const config=JSON.parse(await readFile('wrangler.jsonc','utf8'));
 const v=config.vars;
+if(v.STRIPE_TEST_RESET_BEFORE&&(!Number.isFinite(Date.parse(v.STRIPE_TEST_RESET_BEFORE))||Date.parse(v.STRIPE_TEST_RESET_BEFORE)>Date.now()))throw new Error('Test-account cutover must be a valid past timestamp.');
 if(config.d1_databases[0].database_id.startsWith('00000000'))throw new Error('Create the Cloudflare D1 database and set database_id first.');
 if(!/^https:\/\//.test(v.APP_ORIGIN)||v.APP_ORIGIN.includes('REPLACE'))throw new Error('Configure the deployed HTTPS origin first.');
 if(v.APP_ENV==='local')throw new Error('Local authentication must never be deployed.');

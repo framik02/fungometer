@@ -4,8 +4,9 @@ const config=JSON.parse(await readFile('wrangler.jsonc','utf8'));
 if(config.vars.PAYMENTS_MODE!=='test'||config.vars.AUTH_ACCESS!=='owner-test')throw new Error('Refund helper is for owner sandbox tests only.');
 const sessionId=process.argv[2];
 if(!/^cs_test_[A-Za-z0-9]+$/.test(sessionId||''))throw new Error('Supply a test Checkout session ID.');
-const toml=await readFile('.env.stripe-cli.toml','utf8');
-const key=toml.match(/^\s*test_mode_api_key\s*=\s*["']([^"'\r\n]+)["']/m)?.[1];
+const owned=process.argv.includes('--owned');
+const key=owned?JSON.parse(await readFile('.env.stripe-owned.json','utf8')).key
+ :(await readFile('.env.stripe-cli.toml','utf8')).match(/^\s*test_mode_api_key\s*=\s*["']([^"'\r\n]+)["']/m)?.[1];
 if(!/^(?:sk|rk|rkcs)_test_[A-Za-z0-9]+$/.test(key||''))throw new Error('Missing sandbox key.');
 async function api(path,params){
  const r=await fetch('https://api.stripe.com/v1/'+path,{method:params?'POST':'GET',headers:{Authorization:'Bearer '+key,...(params?{'Content-Type':'application/x-www-form-urlencoded','Idempotency-Key':'fungometer-test-refund-'+sessionId}:{})},...(params?{body:new URLSearchParams(params)}:{}),signal:AbortSignal.timeout(20000)});

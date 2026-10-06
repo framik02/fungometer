@@ -198,7 +198,10 @@ async function api(request,env,path) {
     // The unique pending-order index serializes simultaneous clicks. Keep a
     // 24-hour Stripe expiry, with at least one hour left for API retries.
     // Do not replace still-payable sessions: wait until the full expiry.
-    await stmt(env,'UPDATE orders SET checkout_closed=1 WHERE user_id=? AND plan=? AND mode=? AND paid_at IS NULL AND created_at<?',user.id,input.plan,env.PAYMENTS_MODE,Date.now()-DAY).run();
+    // Switching the owner's test account must not reuse Checkout links from
+    // the old sandbox. This cutoff never affects live or already-paid orders.
+    const testCutoff=env.PAYMENTS_MODE==='test'?Date.parse(env.STRIPE_TEST_RESET_BEFORE)||0:0;
+    await stmt(env,'UPDATE orders SET checkout_closed=1 WHERE user_id=? AND plan=? AND mode=? AND paid_at IS NULL AND created_at<?',user.id,input.plan,env.PAYMENTS_MODE,Math.max(Date.now()-DAY,testCutoff)).run();
     await stmt(env,'INSERT OR IGNORE INTO orders(id,user_id,plan,amount,days,mode,created_at,terms_version) VALUES(?,?,?,?,?,?,?,?)',crypto.randomUUID(),user.id,input.plan,plan.amount,plan.days,env.PAYMENTS_MODE,Date.now(),TERMS_VERSION).run();
     const saved=await stmt(env,'SELECT * FROM orders WHERE user_id=? AND plan=? AND mode=? AND paid_at IS NULL AND revoked=0 AND checkout_closed=0',user.id,input.plan,env.PAYMENTS_MODE).first();
     if(!saved) fail(409,'Pagamento già elaborato. Controlla il tuo account.');
