@@ -1,5 +1,7 @@
 # Collegamento dominio ed email — 6 ottobre 2026
 
+**Percorso superato dalla scelta successiva dell'utente:** mantenere workers.dev e usare Google per l'accesso. Non acquistare il dominio o configurare Resend sulla base di questo documento. Lo stato corrente è in [ACCESSO-GOOGLE.md](ACCESSO-GOOGLE.md). Le indicazioni sotto restano un'opzione futura.
+
 Dominio scelto dall'utente: **fungometer.com**. Cloudflare lo mostrava disponibile a **10,46 USD/anno**, rinnovo attuale 10,46 USD/anno. Imposte escluse dal subtotale: totale da verificare dopo inserimento dati. Rinnovo automatico attivo nel riepilogo. Acquisto non ancora confermato.
 
 ## Preparazione completata

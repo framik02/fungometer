@@ -2,6 +2,7 @@
 APP_ENV="local"
 APP_ORIGIN="http://127.0.0.1:8787"
 AUTH_ENABLED="true"
+AUTH_PROVIDER="email"
 PAYMENTS_MODE="test"
 AUTH_SECRET="replace-with-32-random-bytes-or-more"
 # Local login codes are displayed ONLY on a loopback origin in APP_ENV=local.
@@ -10,3 +11,6 @@ AUTH_SECRET="replace-with-32-random-bytes-or-more"
 # RESEND_API_KEY="re_..."
 # MAIL_FROM="FungoMeter <accesso@your-domain.it>"
 # TURNSTILE_SECRET_KEY="..."
+# For Google login use AUTH_PROVIDER="google" and an approved web client.
+# GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
+# GOOGLE_CLIENT_SECRET="..."

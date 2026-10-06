@@ -1,5 +1,7 @@
 {
-  "name": "fungometer", "private": true, "type": "module",
+  "name": "fungometer",
+  "private": true,
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev --local --ip 127.0.0.1",
     "test": "node --test tests-web/*.test.mjs",
@@ -8,5 +10,10 @@
     "deploy": "npm run test && npm run check:deploy && npm run build && wrangler deploy",
     "db:local": "wrangler d1 migrations apply fungometer --local"
   },
-  "devDependencies": { "wrangler": "^4.0.0" }
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "dependencies": {
+    "jose": "^6.2.12"
+  }
 }

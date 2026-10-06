@@ -2,6 +2,8 @@
 
 Aggiornato il 6 ottobre 2026. Budget: 100 € iniziali, fino a 30 €/mese.
 
+**Aggiornamento successivo:** l'utente ha scelto l'indirizzo gratuito workers.dev e autorizzato «Accedi con Google». [ACCESSO-GOOGLE.md](ACCESSO-GOOGLE.md) sostituisce i passaggi dominio/Resend/Turnstile di questo piano. Il codice comprende 37 test web; l'accesso Google reale richiede il completamento del client nella console.
+
 ## Stato verificato
 
 - Anteprima Cloudflare: https://fungometer.chiarolanza-francesco.workers.dev

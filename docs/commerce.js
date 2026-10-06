@@ -15,7 +15,9 @@ window.FungoCommerce = (() => {
     const notice=$('mode-notice');
     if(notice){notice.hidden=state.authEnabled&&state.paymentsMode==='live'&&state.paymentsReady;notice.textContent=!state.authEnabled?'Anteprima in preparazione: registrazioni e acquisti non ancora aperti.':state.paymentsMode==='test'?'Versione di prova: gli acquisti reali non sono attivi. Eventuali pagamenti Stripe sono soltanto simulazioni.':'Gli acquisti non sono ancora disponibili.';}
     if($('login-form')){
-      $('login-form').hidden=Boolean(state.user)||Boolean(challengeId);$('verify-form').hidden=Boolean(state.user)||!challengeId;$('account-panel').hidden=!state.user;
+      const google=state.authProvider==='google';
+      $('google-panel').hidden=!google||Boolean(state.user);$('google-login').disabled=!state.authEnabled||!state.googleReady;
+      $('login-form').hidden=google||Boolean(state.user)||Boolean(challengeId);$('verify-form').hidden=google||Boolean(state.user)||!challengeId;$('account-panel').hidden=!state.user;
       if(state.user){
         $('account-title').textContent='Il tuo FungoMeter';$('account-intro').textContent='Accesso, scadenza e preferenze in un unico posto.';
         $('account-email').textContent=state.user.email;
@@ -23,7 +25,7 @@ window.FungoCommerce = (() => {
         $('access-detail').textContent=state.access.active?`Accesso fino al ${date(state.access.until)}. Nessun rinnovo automatico.`:state.access.kind==='expired'?'Nessun addebito è stato effettuato. Scegli un pass per continuare a consultare la mappa di tutta Italia.':'Attiva la prova quando sei pronto a esplorare. Parte da questo momento e dura 7 giorni.';
         $('trial-consent').hidden=!state.user.canTrial||state.access.kind==='paid';$('analytics-consent').checked=state.user.analytics;
         $('open-map').textContent=state.access.active?'Esplora la tua zona':'Apri la mappa';
-      }else if(!state.authEnabled){$('login-form').querySelector('button').disabled=true;status('Stiamo preparando l’accesso via email. Riprova quando la configurazione sarà completata.');}
+      }else if(!state.authEnabled){$('login-form').querySelector('button').disabled=true;status(google?'Stiamo completando il collegamento con Google. L’accesso sarà disponibile qui.':'Stiamo preparando l’accesso via email. Riprova quando la configurazione sarà completata.');}
     }
     document.querySelectorAll('.buy').forEach(button=>{button.disabled=!state.paymentsReady;});
     if($('purchase-consent')) $('purchase-consent').hidden=!state.user||!state.paymentsReady;
@@ -37,7 +39,13 @@ window.FungoCommerce = (() => {
   const ready=(async()=>{
     try{await refresh();}catch{status('Servizio di accesso non disponibile. Riprova tra poco.',true);state={access:{active:false,kind:'locked'},user:null};return state;}
     if($('login-form')){
-      if(!state.local&&state.authEnabled&&state.turnstileSiteKey&&!state.user){
+      $('google-login').addEventListener('click',e=>busy(e.target,async()=>{
+        const result=await api('auth/google/start',{plan:new URLSearchParams(location.search).get('piano')});
+        const url=new URL(result.url);if(url.origin!=='https://accounts.google.com')throw new Error('Indirizzo di accesso non valido.');location.assign(url.href);
+      }));
+      const googleError=new URLSearchParams(location.search).get('google');
+      if(googleError)status(googleError==='cancelled'?'Accesso annullato. Puoi riprovare quando vuoi.':googleError==='account_conflict'?'Questo indirizzo è associato a un accesso diverso. Contatta l’assistenza per collegare gli account.':'Accesso non completato o collegamento scaduto. Premi di nuovo Accedi con Google.',googleError!=='cancelled');
+      if(state.authProvider!=='google'&&!state.local&&state.authEnabled&&state.turnstileSiteKey&&!state.user){
         const script=document.createElement('script');script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';script.onload=()=>{widget=window.turnstile.render('#turnstile',{sitekey:state.turnstileSiteKey,action:'login'});};document.head.append(script);
       }
       $('login-form').addEventListener('submit',e=>{e.preventDefault();busy(e.submitter,async()=>{

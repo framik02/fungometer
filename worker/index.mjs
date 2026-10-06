@@ -1,4 +1,5 @@
 import { DAY, PLANS, TERMS_VERSION, normalizeEmail, isLocal, entitlement, hmac, verifyStripeSignature, validatePaidSession } from './core.mjs';
+import {googleApi,googleReady} from './google.mjs';
 
 const json = (data, status=200, extra={}) => new Response(JSON.stringify(data), {status, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...extra}});
 class HttpError extends Error { constructor(status,message) { super(message); this.status=status; } }
@@ -102,13 +103,15 @@ async function api(request,env,path) {
   }
   if(path==='/api/stripe/webhook' && request.method==='POST') return webhook(request,env);
   if(request.method==='POST' && request.headers.get('Origin')!==new URL(env.APP_ORIGIN).origin) fail(403,'Origine non autorizzata.');
+  if(path.startsWith('/api/auth/google/'))return googleApi(request,env,path,{stmt,fail,json,body,limit,sessionCookie});
   const user=await identity(request,env);
   if(path==='/api/me' && request.method==='GET') return json({user:user?{email:user.email,analytics:Boolean(user.analytics),canTrial:!user.trial_started_at}:null,
-    access:await access(user,env),plans:PLANS,termsVersion:TERMS_VERSION,authEnabled:env.AUTH_ENABLED==='true',
+    access:await access(user,env),plans:PLANS,termsVersion:TERMS_VERSION,authEnabled:env.AUTH_ENABLED==='true',authProvider:env.AUTH_PROVIDER||'email',googleReady:googleReady(env),
     paymentsReady:Boolean(paymentsReady(env)),paymentsMode:env.PAYMENTS_MODE,
     turnstileSiteKey:env.TURNSTILE_SITE_KEY||'',local:isLocal(request,env),
     seller:{name:env.SELLER_NAME||'',address:env.SELLER_ADDRESS||'',taxId:env.SELLER_TAX_ID||'',email:env.SUPPORT_EMAIL||''}});
   if(path==='/api/auth/request' && request.method==='POST') {
+    if(env.AUTH_PROVIDER==='google')fail(404,'Usa il pulsante Accedi con Google.');
     requireSecret(env);
     if(env.AUTH_ENABLED!=='true') fail(503,'La prova sarà disponibile a breve. Nessun dato account è stato salvato.');
     const input=await body(request);
@@ -134,6 +137,7 @@ async function api(request,env,path) {
     return json({id});
   }
   if(path==='/api/auth/verify' && request.method==='POST') {
+    if(env.AUTH_PROVIDER==='google')fail(404,'Usa il pulsante Accedi con Google.');
     requireSecret(env);
     if(env.AUTH_ENABLED!=='true') fail(503,'Accesso temporaneamente non disponibile.');
     const input=await body(request);
@@ -231,7 +235,7 @@ export default {
       const result=await handle(request,env);
       const response=new Response(result.body,result);
       response.headers.set('X-Content-Type-Options','nosniff');
-      response.headers.set('Referrer-Policy','strict-origin-when-cross-origin');
+      if(!response.headers.has('Referrer-Policy'))response.headers.set('Referrer-Policy','strict-origin-when-cross-origin');
       response.headers.set('X-Frame-Options','DENY');
       response.headers.set('Permissions-Policy','camera=(), microphone=(), geolocation=(self)');
       return response;
@@ -241,6 +245,7 @@ export default {
     const now=Date.now();
     ctx.waitUntil(env.DB.batch([
       stmt(env,'DELETE FROM sessions WHERE expires_at<?',now),stmt(env,'DELETE FROM login_codes WHERE expires_at<?',now),
+      stmt(env,'DELETE FROM oauth_flows WHERE expires_at<?',now),
       stmt(env,'DELETE FROM rate_limits WHERE expires_at<?',now),stmt(env,'DELETE FROM webhook_events WHERE received_at<?',now-90*DAY),
       stmt(env,'DELETE FROM funnel_events WHERE day<?',new Date(now-30*DAY).toISOString().slice(0,10))
     ]));
