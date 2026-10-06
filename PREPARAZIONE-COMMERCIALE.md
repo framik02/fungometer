@@ -10,7 +10,7 @@ Gestore: Francesco Chiarolanza; assistenza e privacy: fungometer@gmail.com. Indi
 
 | Fonte | Riscontro | Azione prima della vendita |
 |---|---|---|
-| Open-Meteo | Dati CC BY 4.0; accesso API gratuito limitato all'uso non commerciale; Standard 29 EUR/mese nel listino | Acquistare il piano appropriato e verificare chiave/totale. Separare licenza dei dati e condizioni del servizio API. Vedere AGGIORNAMENTO-QUOTIDIANO.md |
+| Open-Meteo | Dati CC BY 4.0; accesso API gratuito limitato all'uso non commerciale; Standard 35,38 EUR/mese nel checkout Italia (29 + imposte), oltre budget | Attendere la scelta sul costo prima di acquistare. Separare licenza dei dati e condizioni del servizio API. Vedere AGGIORNAMENTO-QUOTIDIANO.md |
 | Corine 2018 | La policy Copernicus Land consente il riutilizzo con attribuzione; i punteggi sono elaborazioni di Fungometer | Conservare metadati e versione, indicare fonte ed elaborazioni |
 | Copernicus GLO-30 | Accesso con licenza gratuita, attribuzione specifica anche per elaborazioni | Conservare licenza applicabile al prodotto scaricato; verificare la formula di attribuzione dei derivati |
 | Carta forestale Lazio | FAQ ufficiale del Geoportale indica CC BY 4.0 per i livelli pubblici | Conservare metadati specifici di tipi_forestali2; fonte già indicata nel sito |

@@ -2,7 +2,9 @@
 
 ## Stato effettivo
 
-Codice preparato; automazione Cloudflare non ancora attiva. GitHub è accessibile come framik02. Nel repository pubblico framik02/fungometer sono ancora presenti il vecchio aggiornamento e GitHub Pages, senza segreti o variabili per Cloudflare. Non confondere il cron di pulizia degli accessi nel Worker con l'aggiornamento meteo.
+Verifica remota completata con successo: [GitHub Actions, esecuzione 37503204900](https://github.com/framik02/fungometer/actions/runs/37503204900). Eseguiti 55 test web, 57 test Python, controllo configurazione e build; il lavoro di aggiornamento/pubblicazione è rimasto escluso. Verificata inoltre la struttura della fotografia dei dati del 6 ottobre (224 riquadri, 1.853 gruppi, 907 celle locali, 229 file) usando la sua data originale: non è una nuova acquisizione meteo. Informativa e attribuzioni pubblicate nella versione Cloudflare `d3b8cddf-78b5-4534-a09d-14c697ca6a4e`, con verifica del sito e delle restrizioni riuscita.
+
+Codice preparato e caricato sul ramo `codex/cloudflare-trial-stripe`; automazione Cloudflare non ancora attiva. GitHub è accessibile come framik02. Il ramo predefinito del repository pubblico framik02/fungometer conserva ancora il vecchio aggiornamento e GitHub Pages, senza segreti o variabili per Cloudflare. Non confondere il cron di pulizia degli accessi nel Worker con l'aggiornamento meteo.
 
 Il nuovo workflow ha una verifica manuale senza segreti e una pubblicazione condizionata a `CLOUDFLARE_PIPELINE_READY=true`. La pianificazione parte alle 03:17 UTC (05:17 ora legale italiana, 04:17 ora solare), con possibili ritardi di GitHub. Usa la licenza commerciale, genera tutte le zone e pubblica solo dopo controlli completi. Nessun commit dei nuovi punteggi e nessun caricamento di dati meteo come artefatti pubblici. Le migrazioni D1 sono escluse dal lavoro quotidiano.
 
@@ -10,7 +12,7 @@ Il nuovo workflow ha una verifica manuale senza segreti e una pubblicazione cond
 
 907 celle locali + 1.853 gruppi nazionali, cinque variabili, 26 giorni passati e otto giorni di previsione: circa 6.703 chiamate conteggiate al giorno, 207.789 in 31 giorni, prima di tentativi ripetuti. Il calcolo tiene conto del moltiplicatore per intervalli superiori a 14 giorni. Il numero di utenti non moltiplica questo consumo: consultano gli stessi file elaborati.
 
-Il 6 ottobre il listino e il checkout mostrano API Standard a 29 EUR/mese, un milione di chiamate e licenza commerciale. Il totale fiscale definitivo richiede i dati di fatturazione: non considerare definitivo il valore iniziale del checkout senza indirizzo. Nessun acquisto effettuato. Questo costo lascia al massimo 1 EUR sul tetto tecnico mensile, prima di eventuali imposte; Cloudflare resta sul piano gratuito nei suoi limiti. I costi fiscali/professionali non sono inclusi.
+Il 6 ottobre il listino mostra API Standard a 29 EUR/mese, un milione di chiamate e licenza commerciale. Dopo il caricamento del checkout con paese Italia e valuta EUR, il totale mostrato è **35,38 EUR/mese: 29 EUR + 6,38 EUR di imposte**. Rinnovo mensile automatico. Screenshot locale `../open-meteo-preventivo.png`. Nessun acquisto effettuato: supera il limite di 30 EUR/mese comunicato dall'utente. È stata richiesta una scelta tra modifica del budget, ricerca di un'alternativa commerciale o prosecuzione del solo collaudo personale. Cloudflare resta sul piano gratuito nei suoi limiti; i costi fiscali/professionali non sono inclusi.
 
 Il lavoro quotidiano chiama `/v1/forecast` con `past_days=26`, parametro ammesso dalla documentazione fino a 92 giorni: dalle specifiche pubblicate è compatibile con Standard. Il separato script di prove storiche chiama Historical Forecast API, che richiede Professional (99 EUR/mese nel listino verificato). Non viene eseguito dal workflow quotidiano. Fare una richiesta campione con la nuova chiave prima di avviare l'intero calcolo.
 
