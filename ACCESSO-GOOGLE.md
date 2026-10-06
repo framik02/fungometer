@@ -6,7 +6,7 @@ URL: https://fungometer.chiarolanza-francesco.workers.dev
 
 Contatto pubblico confermato dall'utente il 6 ottobre 2026: **fungometer@gmail.com**, nuovo account Google dedicato. Non pubblicare l'email personale precedente. Il nome del titolare rimane da confermare separatamente.
 
-Nella console, il progetto è ancora gestito dall'account personale: il menu assistenza mostra solo l'utente connesso. Preparata (non ancora salvata) la concessione a `fungometer@gmail.com` del solo ruolo `roles/oauthconfig.editor` nel progetto dedicato. Attende conferma dell'utente perché consente di modificare configurazione e credenziali OAuth fino a revoca. Dopo il salvataggio, accedere alla console con l'account dedicato e completare il consenso. Nessuna concessione di accesso alla posta o alla fatturazione.
+Dopo conferma esplicita dell'utente, assegnato e verificato nella tabella IAM il ruolo `roles/oauthconfig.editor` a `fungometer@gmail.com` nel solo progetto dedicato. Consente di modificare configurazione e credenziali OAuth fino a revoca; l'account personale rimane proprietario. Nessuna concessione di accesso alla posta o alla fatturazione. Aperta la console con l'account dedicato: il primo accesso richiede l'accettazione dei termini Google Cloud. Schermata lasciata all'utente, termini non accettati dall'assistente. Dopo questo passaggio, completare consenso e client nell'account dedicato.
 
 Progetto Google dedicato creato: **Fungometer**, ID **skilful-reserve-510813-g8**. Nessuna fatturazione attivata. Configurazione del consenso/client ancora da completare alla stesura di questo documento.
 
