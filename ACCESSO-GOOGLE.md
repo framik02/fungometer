@@ -6,9 +6,9 @@ URL: https://fungometer.chiarolanza-francesco.workers.dev
 
 Contatto pubblico confermato dall'utente il 6 ottobre 2026: **fungometer@gmail.com**, nuovo account Google dedicato. Non pubblicare l'email personale precedente. Il nome del titolare rimane da confermare separatamente.
 
-Dopo conferma esplicita dell'utente, assegnato e verificato nella tabella IAM il ruolo `roles/oauthconfig.editor` a `fungometer@gmail.com` nel solo progetto dedicato. Consente di modificare configurazione e credenziali OAuth fino a revoca; l'account personale rimane proprietario. Nessuna concessione di accesso alla posta o alla fatturazione. Aperta la console con l'account dedicato: il primo accesso richiede l'accettazione dei termini Google Cloud. Schermata lasciata all'utente, termini non accettati dall'assistente. Dopo questo passaggio, completare consenso e client nell'account dedicato.
+Dopo conferma esplicita dell'utente, assegnato e verificato nella tabella IAM il ruolo `roles/oauthconfig.editor` a `fungometer@gmail.com` nel solo progetto dedicato. Consente di modificare configurazione e credenziali OAuth fino a revoca; l'account personale rimane proprietario. Nessuna concessione di accesso alla posta o alla fatturazione. L'utente ha completato personalmente l'accettazione dei termini Google Cloud e l'accesso con l'account dedicato è stato verificato. Aggiunto anche `roles/serviceusage.serviceUsageViewer`, ruolo di sola lettura suggerito dalla console per `serviceusage.quotas.get`: necessario per aprire Google Auth Platform. Verificati il salvataggio IAM, la propagazione e l'apertura di Google Auth Platform con il nuovo account.
 
-Progetto Google dedicato creato: **Fungometer**, ID **skilful-reserve-510813-g8**. Nessuna fatturazione attivata. Configurazione del consenso/client ancora da completare alla stesura di questo documento.
+Progetto Google dedicato creato: **Fungometer**, ID **skilful-reserve-510813-g8**. Nessuna fatturazione attivata. Configurazione iniziale compilata con nome FungoMeter, assistenza e contatto sviluppatore fungometer@gmail.com, pubblico Esterno (test). La schermata finale richiede le Norme relative ai dati utente dei servizi API Google: lasciata all'utente per accettazione, Continua e Crea. La creazione non è ancora confermata; client OAuth ancora da creare.
 
 ## Configurazione
 
