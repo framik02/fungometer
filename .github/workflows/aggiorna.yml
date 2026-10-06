@@ -41,6 +41,11 @@ jobs:
     steps:
       - name: Scarica il repository
         uses: actions/checkout@v7
+        with:
+          # La versione più recente, non quella di quando il lavoro è entrato in
+          # coda: un lavoro in attesa deve vedere i punteggi già salvati da chi
+          # l'ha preceduto, e uscire invece di rifare tutto
+          ref: main
 
       - name: Installa Python
         uses: actions/setup-python@v7
