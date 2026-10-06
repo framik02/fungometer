@@ -1,5 +1,6 @@
 import {createRemoteJWKSet,customFetch,jwtVerify} from 'jose';
 import {DAY,hmac,normalizeEmail,equal} from './core.mjs';
+import {authAccessAllowed} from './auth-access.mjs';
 
 const keys=createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'),{
   [customFetch]:(...args)=>fetch(...args),timeoutDuration:10000
@@ -50,6 +51,7 @@ export async function googleApi(request,env,path,{stmt,fail,json,body,limit,sess
    const tokens=await response.json();identity=await verifyGoogleToken(tokens.id_token,env.GOOGLE_CLIENT_ID,flow.nonce);
    // Tokens are intentionally not stored. No Gmail/Drive or refresh access.
   }catch{return finish('/account.html?google=failed');}
+  if(!authAccessAllowed(env,identity.email))return finish('/account.html?google=restricted');
   let account=await stmt(env,'SELECT * FROM users WHERE google_sub=?',identity.sub).first();
   if(!account){
    await stmt(env,'INSERT OR IGNORE INTO users(id,email,created_at,google_sub) VALUES(?,?,?,?)',crypto.randomUUID(),identity.email,Date.now(),identity.sub).run();

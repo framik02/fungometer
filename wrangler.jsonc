@@ -9,8 +9,8 @@
   "vars": {
     "APP_ENV": "staging", "APP_ORIGIN": "https://fungometer.chiarolanza-francesco.workers.dev",
     "PAYMENTS_MODE": "test", "LIVE_SALES_READY": "false",
-    "AUTH_ENABLED": "false", "AUTH_PROVIDER": "google", "GOOGLE_CLIENT_ID": "751296262314-2ie6p5ffcu8iodmpeek0g7csiqg2ahp8.apps.googleusercontent.com", "TURNSTILE_SITE_KEY": "",
-    "SELLER_NAME": "", "SUPPORT_EMAIL": "fungometer@gmail.com", "SELLER_ADDRESS": "", "SELLER_TAX_ID": "",
+    "AUTH_ENABLED": "true", "AUTH_ACCESS": "owner-test", "AUTH_PROVIDER": "google", "GOOGLE_CLIENT_ID": "751296262314-2ie6p5ffcu8iodmpeek0g7csiqg2ahp8.apps.googleusercontent.com", "TURNSTILE_SITE_KEY": "",
+    "SELLER_NAME": "Francesco Chiarolanza", "SUPPORT_EMAIL": "fungometer@gmail.com", "SELLER_ADDRESS": "", "SELLER_TAX_ID": "",
     "MAIL_FROM": "", "LICENSES_READY": "false", "PRIVATE_DATA_READY": "false"
   },
   "triggers": { "crons": ["23 3 * * *"] },

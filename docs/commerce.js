@@ -13,11 +13,12 @@ window.FungoCommerce = (() => {
   async function refresh(){state=await api('me');render();return state;}
   function render(){
     const notice=$('mode-notice');
-    if(notice){notice.hidden=state.authEnabled&&state.paymentsMode==='live'&&state.paymentsReady;notice.textContent=!state.authEnabled?'Anteprima in preparazione: registrazioni e acquisti non ancora aperti.':state.paymentsMode==='test'?'Versione di prova: gli acquisti reali non sono attivi. Eventuali pagamenti Stripe sono soltanto simulazioni.':'Gli acquisti non sono ancora disponibili.';}
+    if(notice){notice.hidden=state.authEnabled&&!state.authRestricted&&state.paymentsMode==='live'&&state.paymentsReady;notice.textContent=!state.authEnabled?'Anteprima in preparazione: registrazioni e acquisti non ancora aperti.':state.authRestricted?'Collaudo riservato al gestore. Le registrazioni pubbliche e gli acquisti non sono ancora aperti.':state.paymentsMode==='test'?'Versione di prova: gli acquisti reali non sono attivi. Eventuali pagamenti Stripe sono soltanto simulazioni.':'Gli acquisti non sono ancora disponibili.';}
     if($('login-form')){
       const google=state.authProvider==='google';
       $('google-panel').hidden=!google||Boolean(state.user);$('google-login').disabled=!state.authEnabled||!state.googleReady;
       $('login-form').hidden=google||Boolean(state.user)||Boolean(challengeId);$('verify-form').hidden=google||Boolean(state.user)||!challengeId;$('account-panel').hidden=!state.user;
+      if(state.authRestricted&&!state.user){$('account-title').textContent='Accesso di collaudo';$('account-intro').textContent='In questa fase può accedere soltanto l’account Google del gestore. La prova pubblica aprirà dopo le verifiche.';}
       if(state.user){
         $('account-title').textContent='Il tuo FungoMeter';$('account-intro').textContent='Accesso, scadenza e preferenze in un unico posto.';
         $('account-email').textContent=state.user.email;
@@ -44,7 +45,7 @@ window.FungoCommerce = (() => {
         const url=new URL(result.url);if(url.origin!=='https://accounts.google.com')throw new Error('Indirizzo di accesso non valido.');location.assign(url.href);
       }));
       const googleError=new URLSearchParams(location.search).get('google');
-      if(googleError)status(googleError==='cancelled'?'Accesso annullato. Puoi riprovare quando vuoi.':googleError==='account_conflict'?'Questo indirizzo è associato a un accesso diverso. Contatta l’assistenza per collegare gli account.':'Accesso non completato o collegamento scaduto. Premi di nuovo Accedi con Google.',googleError!=='cancelled');
+      if(googleError)status(googleError==='cancelled'?'Accesso annullato. Puoi riprovare quando vuoi.':googleError==='restricted'?'L’accesso è riservato all’account Google del gestore durante il collaudo. Le registrazioni pubbliche non sono ancora aperte.':googleError==='account_conflict'?'Questo indirizzo è associato a un accesso diverso. Contatta l’assistenza per collegare gli account.':'Accesso non completato o collegamento scaduto. Premi di nuovo Accedi con Google.',googleError!=='cancelled');
       if(state.authProvider!=='google'&&!state.local&&state.authEnabled&&state.turnstileSiteKey&&!state.user){
         const script=document.createElement('script');script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';script.onload=()=>{widget=window.turnstile.render('#turnstile',{sitekey:state.turnstileSiteKey,action:'login'});};document.head.append(script);
       }

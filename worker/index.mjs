@@ -1,5 +1,6 @@
 import { DAY, PLANS, TERMS_VERSION, normalizeEmail, isLocal, entitlement, hmac, verifyStripeSignature, validatePaidSession } from './core.mjs';
 import {googleApi,googleReady} from './google.mjs';
+import {authAccessAllowed} from './auth-access.mjs';
 
 const json = (data, status=200, extra={}) => new Response(JSON.stringify(data), {status, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...extra}});
 class HttpError extends Error { constructor(status,message) { super(message); this.status=status; } }
@@ -13,11 +14,12 @@ async function body(request) {
 }
 function requireSecret(env) { if (!env.AUTH_SECRET || env.AUTH_SECRET.length<32) fail(503,'Accesso non ancora configurato.'); }
 async function identity(request,env) {
-  if (!env.DB || !env.AUTH_SECRET) return null;
+  if (!env.DB || !env.AUTH_SECRET || env.AUTH_ENABLED!=='true') return null;
   const cookieName=new URL(request.url).protocol==='https:'?'__Host-fm':'fm';
   const token=request.headers.get('Cookie')?.split(';').map(x=>x.trim()).find(x=>x.startsWith(cookieName+'='))?.slice(cookieName.length+1);
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
-  return stmt(env,'SELECT u.*,s.token_hash FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?',await hmac(env.AUTH_SECRET,token),Date.now()).first();
+  const user=await stmt(env,'SELECT u.*,s.token_hash FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?',await hmac(env.AUTH_SECRET,token),Date.now()).first();
+  return user&&authAccessAllowed(env,user.email)?user:null;
 }
 async function access(user,env) {
   const paid = user ? await stmt(env,'SELECT MAX(access_end) AS until FROM orders WHERE user_id=? AND revoked=0 AND paid_at IS NOT NULL',user.id).first() : null;
@@ -107,10 +109,11 @@ async function api(request,env,path) {
   const user=await identity(request,env);
   if(path==='/api/me' && request.method==='GET') return json({user:user?{email:user.email,analytics:Boolean(user.analytics),canTrial:!user.trial_started_at}:null,
     access:await access(user,env),plans:PLANS,termsVersion:TERMS_VERSION,authEnabled:env.AUTH_ENABLED==='true',authProvider:env.AUTH_PROVIDER||'email',googleReady:googleReady(env),
-    paymentsReady:Boolean(paymentsReady(env)),paymentsMode:env.PAYMENTS_MODE,
+    authRestricted:env.AUTH_ACCESS==='owner-test',paymentsReady:Boolean(paymentsReady(env)),paymentsMode:env.PAYMENTS_MODE,
     turnstileSiteKey:env.TURNSTILE_SITE_KEY||'',local:isLocal(request,env),
     seller:{name:env.SELLER_NAME||'',address:env.SELLER_ADDRESS||'',taxId:env.SELLER_TAX_ID||'',email:env.SUPPORT_EMAIL||''}});
   if(path==='/api/auth/request' && request.method==='POST') {
+    if(env.AUTH_ACCESS&&env.AUTH_ACCESS!=='public')fail(403,'Accesso riservato al collaudo Google.');
     if(env.AUTH_PROVIDER==='google')fail(404,'Usa il pulsante Accedi con Google.');
     requireSecret(env);
     if(env.AUTH_ENABLED!=='true') fail(503,'La prova sarà disponibile a breve. Nessun dato account è stato salvato.');
@@ -137,6 +140,7 @@ async function api(request,env,path) {
     return json({id});
   }
   if(path==='/api/auth/verify' && request.method==='POST') {
+    if(env.AUTH_ACCESS&&env.AUTH_ACCESS!=='public')fail(403,'Accesso riservato al collaudo Google.');
     if(env.AUTH_PROVIDER==='google')fail(404,'Usa il pulsante Accedi con Google.');
     requireSecret(env);
     if(env.AUTH_ENABLED!=='true') fail(503,'Accesso temporaneamente non disponibile.');

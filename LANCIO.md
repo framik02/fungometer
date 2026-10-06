@@ -2,12 +2,12 @@
 
 Aggiornato il 6 ottobre 2026. Budget: 100 € iniziali, fino a 30 €/mese.
 
-**Aggiornamento successivo:** l'utente ha scelto l'indirizzo gratuito workers.dev e autorizzato «Accedi con Google». [ACCESSO-GOOGLE.md](ACCESSO-GOOGLE.md) sostituisce i passaggi dominio/Resend/Turnstile di questo piano. Il codice comprende 37 test web superati. Client Google creato, segreto salvato in Cloudflare, contatto pubblico fungometer@gmail.com: il sito verifica la presenza della configurazione. Restano collaudo OAuth reale e completamento delle informative; registrazioni e pagamenti reali disabilitati.
+**Aggiornamento successivo:** l'utente ha scelto l'indirizzo gratuito workers.dev e autorizzato «Accedi con Google». [ACCESSO-GOOGLE.md](ACCESSO-GOOGLE.md) sostituisce i passaggi dominio/Resend/Turnstile di questo piano. Il codice comprende 42 test web superati. Client Google creato, segreto salvato in Cloudflare, contatto pubblico fungometer@gmail.com: il sito verifica la presenza della configurazione. Accesso Google reale riuscito per il solo gestore, Francesco Chiarolanza, con contatto fungometer@gmail.com. Informative commerciali ancora da completare; registrazioni pubbliche e pagamenti reali disabilitati.
 
 ## Stato verificato
 
 - Anteprima Cloudflare: https://fungometer.chiarolanza-francesco.workers.dev
-- Database D1 creato, migrazioni applicate. Accessi pubblici e incassi reali disattivati.
+- Database D1 creato, migrazioni applicate. Accessi pubblici e incassi reali disattivati; collaudo Google riservato al gestore.
 - Prova completa: 7 giorni su tutta Italia, senza carta; nessuna demo geografica permanente. Alla scadenza la mappa richiede un pass.
 - Pass proposti: 9,90 €/90 giorni; 19,90 €/365 giorni. Pagamento unico, senza rinnovo. L'acquisto conserva il tempo di prova residuo.
 - Accesso email, limiti antispam, sessioni protette, prezzi verificati sul server, webhook firmati, gestione duplicati/rimborsi implementati. Stripe verificato con simulazioni automatiche, non ancora con un account Stripe reale in modalità test.
@@ -17,11 +17,11 @@ Aggiornato il 6 ottobre 2026. Budget: 100 € iniziali, fino a 30 €/mese.
 ## Ordine operativo
 
 1. Creare personalmente Stripe e usare inizialmente l'ambiente test. Non inviare chiavi in chat.
-2. Configurare nel Worker i segreti `AUTH_SECRET` (32 byte casuali), `STRIPE_SECRET_KEY` test e `STRIPE_WEBHOOK_SECRET`. Non usare `.dev.vars` per pubblicare: contiene impostazioni esclusivamente locali.
+2. `AUTH_SECRET` e `GOOGLE_CLIENT_SECRET` sono già configurati. Configurare nel Worker `STRIPE_SECRET_KEY` test e `STRIPE_WEBHOOK_SECRET`. Non usare `.dev.vars` per pubblicare: contiene impostazioni esclusivamente locali.
 3. In Stripe creare il webhook `https://fungometer.chiarolanza-francesco.workers.dev/api/stripe/webhook`, eventi `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed`. Carte e wallet supportati da Checkout; nessun abbonamento Billing. Non occorrono prodotti creati a mano: il server imposta nome e prezzo.
-4. Per l'accesso email: scegliere un dominio proprio e un mittente verificato in Resend; configurare `RESEND_API_KEY`, `MAIL_FROM`, `TURNSTILE_SECRET_KEY`, `TURNSTILE_SITE_KEY` e il dominio consentito in Turnstile. Il sottodominio workers.dev basta per l'anteprima, non verifica un dominio mittente email.
-5. Completare identità del titolare, recapiti, informativa privacy, conservazione/cancellazione account, condizioni e assistenza. I documenti in `docs` sono bozze dichiarate. Definire concretamente recesso, rimborsi e conferme su supporto durevole; la checkbox attuale NON sostituisce tutti questi obblighi.
-6. Attivare `AUTH_ENABLED` solo dopo configurazione email, antispam, dati aggiornati e documenti completi. Provare sul dominio pubblico: accesso, avvio prova, scadenza, pagamento Stripe test, webhook ritardato, rimborso, logout. Le prove locali non sostituiscono questa verifica.
+4. Percorso scelto: Google e indirizzo gratuito Cloudflare, già configurati. Resend, dominio proprio e Turnstile non sono necessari per questo percorso.
+5. Identità del titolare e contatto confermati. Completare informativa privacy, conservazione/cancellazione account, condizioni e assistenza. I documenti in `docs` sono bozze dichiarate. Definire concretamente recesso, rimborsi e conferme su supporto durevole; la checkbox attuale NON sostituisce tutti questi obblighi.
+6. Accesso Google già attivo soltanto per il gestore (`AUTH_ACCESS=owner-test`): login e logout verificati nel browser. Impostare `AUTH_ACCESS=public` solo dopo documenti completi, dati aggiornati e licenze verificate. Collaudare avvio prova, scadenza, pagamento Stripe test, webhook ritardato e rimborso prima delle vendite.
 7. Collegare l'aggiornamento quotidiano: nel repository GitHub configurare i segreti `CLOUDFLARE_API_TOKEN` (limitato a questo account, Workers Scripts edit e D1 edit), `OPEN_METEO_API_KEY`; la variabile `CLOUDFLARE_ACCOUNT_ID`; infine `CLOUDFLARE_PIPELINE_READY=true`. Pubblicare questo ramo dopo revisione, eseguire il workflow manualmente e verificare la data sul sito. Il workflow nuovo sostituisce i commit pubblici dei punteggi con il caricamento diretto degli asset protetti. Il cron è una partenza prevista, non una garanzia d'orario.
 8. Acquisire la licenza commerciale meteo appropriata e controllare licenze di cartografia/terreno e Dal web. Gli endpoint commerciali sono predisposti, ma non è stato acquistato alcun piano. Non vendere l'accesso alla mappa facendo affidamento sui soli termini gratuiti non commerciali.
 9. Disattivare la vecchia pubblicazione quotidiana e trasferire GitHub Pages verso il nuovo sito. Non eliminare lo storico senza un piano di conservazione: quanto già pubblico rimane copiabile. `PRIVATE_DATA_READY` resta false finché i nuovi dati non vengono più pubblicati sul vecchio canale.
@@ -29,7 +29,7 @@ Aggiornato il 6 ottobre 2026. Budget: 100 € iniziali, fino a 30 €/mese.
 
 ## Test e manutenzione
 
-`npm test`: 23 test di accesso/pagamento, inclusi concorrenza, firme, scadenza e rimborsi. `python -m pytest -q`: 49 test del motore e del collegamento meteo. Browser locale: login, avvio prova e Dal web verificati. Dati del 6 ottobre: l'anteprima non aggiorna autonomamente il meteo finché GitHub non è collegato. Dopo 36 ore senza aggiornamenti nuove prove e acquisti vengono bloccati; gli accessi già attivi mantengono la consultazione con le date indicate.
+`npm test`: 42 test di accesso/pagamento, inclusi concorrenza, firme, scadenza e rimborsi. `python -m pytest -q`: 49 test del motore e del collegamento meteo. Browser locale: login, avvio prova e Dal web verificati. Dati del 6 ottobre: l'anteprima non aggiorna autonomamente il meteo finché GitHub non è collegato. Dopo 36 ore senza aggiornamenti nuove prove e acquisti vengono bloccati; gli accessi già attivi mantengono la consultazione con le date indicate.
 
 Non modificare i file di migrazione applicati: aggiungere migrazioni successive. Prima di aggiornamenti al database, esportare un backup protetto con Wrangler D1. Non salvare esportazioni contenenti utenti nel repository. Dopo un problema controllare Stripe prima di chiedere un secondo pagamento. Rimborsi parziali e contestazioni sospendono il pass interessato; le contestazioni vinte richiedono gestione manuale. La gestione amministrativa completa di cancellazioni, richieste privacy, assistenza e ripristino è ancora da completare.
 

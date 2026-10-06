@@ -84,3 +84,40 @@ test('Google mode disables email OTP and rejects arbitrary post-login destinatio
  assert.equal((await req('/api/auth/verify',{id:'any',code:'123456'})).status,404);
  await start('https://evil.test');assert.equal(db.prepare('SELECT next_path FROM oauth_flows').get().next_path,'/account.html');
 });
+
+test('owner commissioning rejects a verified outsider before storing an account or session',async()=>{
+ Object.assign(env,{AUTH_ACCESS:'owner-test',SUPPORT_EMAIL:'owner@example.test'});
+ const r=await callback(await start());assert.equal(r.headers.get('location'),origin+'/account.html?google=restricted');
+ assert.equal(session(r),undefined);assert.equal(db.prepare('SELECT COUNT(*) n FROM users').get().n,0);assert.equal(db.prepare('SELECT COUNT(*) n FROM sessions').get().n,0);
+});
+
+test('owner commissioning accepts only the verified controller and does not start a trial',async()=>{
+ Object.assign(env,{AUTH_ACCESS:'owner-test',SUPPORT_EMAIL:'TESTER@example.test'});
+ const r=await callback(await start());assert.ok(session(r));
+ const me=await(await req('/api/me',undefined,session(r))).json();assert.equal(me.authRestricted,true);assert.equal(me.user.canTrial,true);assert.equal(me.access.active,false);
+});
+
+test('restriction applies to existing sessions and disabling auth revokes access immediately',async()=>{
+ const r=await callback(await start()),cookie=session(r);
+ db.prepare('UPDATE users SET trial_started_at=?,trial_ends_at=?').run(Date.now(),Date.now()+3600000);
+ Object.assign(env,{AUTH_ACCESS:'owner-test',SUPPORT_EMAIL:'different@example.test'});
+ assert.equal((await(await req('/api/me',undefined,cookie)).json()).user,null);
+ assert.equal((await req('/data/punteggi.json',undefined,cookie)).status,403);
+ assert.equal((await req('/api/trial',{},cookie)).status,401);
+ env.SUPPORT_EMAIL='tester@example.test';assert.equal((await(await req('/api/me',undefined,cookie)).json()).access.active,true);
+ env.AUTH_ENABLED='false';assert.equal((await(await req('/api/me',undefined,cookie)).json()).user,null);
+ assert.equal((await req('/data/punteggi.json',undefined,cookie)).status,403);
+});
+
+test('commissioning fails closed with absent owner, unknown mode or live payments',async()=>{
+ env.AUTH_ACCESS='owner-test';assert.equal(session(await callback(await start())),undefined);
+ Object.assign(env,{SUPPORT_EMAIL:'tester@example.test',AUTH_ACCESS:'typo'});assert.equal(session(await callback(await start())),undefined);
+ Object.assign(env,{AUTH_ACCESS:'owner-test',PAYMENTS_MODE:'live'});assert.equal(session(await callback(await start())),undefined);
+ assert.equal(db.prepare('SELECT COUNT(*) n FROM users').get().n,0);
+});
+
+test('email endpoints cannot bypass owner commissioning when provider is misconfigured',async()=>{
+ Object.assign(env,{AUTH_ACCESS:'owner-test',AUTH_PROVIDER:'email',SUPPORT_EMAIL:'tester@example.test'});
+ assert.equal((await req('/api/auth/request',{email:'tester@example.test'})).status,403);
+ assert.equal((await req('/api/auth/verify',{id:'any',code:'123456'})).status,403);
+});
