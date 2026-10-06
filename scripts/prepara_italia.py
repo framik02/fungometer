@@ -34,7 +34,8 @@ import rasterio
 from pyproj import Transformer
 from rasterio.features import rasterize
 from rasterio.transform import from_origin
-from shapely.geometry import Point, Polygon, mapping
+from shapely.geometry import Point, Polygon, box, mapping
+from shapely.ops import unary_union
 
 RADICE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RADICE))
@@ -144,18 +145,29 @@ def celle_gia_coperte():
         return np.array([c["bbox"] for c in json.load(f)])
 
 
-def prepara_riquadro(codice, sud, ovest, comuni, coperte, config):
+def celle_non_coperte(celle, coperte):
+    """Scarta solo celle interamente coperte, anche da più rettangoli locali.
+
+    Il centro dentro un'area non basta: ai bordi lasciava strisce senza dati.
+    La tolleranza assorbe soltanto gli arrotondamenti delle coordinate.
+    """
+    if not len(coperte):
+        return celle
+    copertura = unary_union([box(w, s, e, n) for s, w, n, e in coperte]).buffer(1e-9)
+    return [c for c in celle if not copertura.covers(
+        box(c["bbox"][1], c["bbox"][0], c["bbox"][3], c["bbox"][2]))]
+
+
+def prepara_riquadro(codice, sud, ovest, comuni, coperte, config, *, solo_celle=None):
     """Calcola i dati fissi di un riquadro. Restituisce il dizionario intermedio
     (eventualmente con zero celle, per ricordare che il riquadro è vuoto)."""
     nord, est = sud + LATO_RIQUADRO, ovest + LATO_RIQUADRO
     raster_comuni, tr_comuni, tabella = comuni
 
     celle = celle_riquadro(codice, sud, ovest)
-    # Fuori dalle celle di Foligno e Roma
-    if len(coperte):
-        celle = [c for c in celle if not np.any(
-            (coperte[:, 0] <= c["lat"]) & (c["lat"] <= coperte[:, 2])
-            & (coperte[:, 1] <= c["lon"]) & (c["lon"] <= coperte[:, 3]))]
+    celle = celle_non_coperte(celle, coperte)
+    if solo_celle is not None:
+        celle = [c for c in celle if c["id"] in solo_celle]
     if not celle:
         return {"celle": [], "sottocelle": {}}
     punti = [punti_delle_sottocelle(c) for c in celle]
@@ -173,8 +185,9 @@ def prepara_riquadro(codice, sud, ovest, comuni, coperte, config):
     quote = leggi_nei_punti(quote_dem, tr, lats, lons, vuoto=np.nan)
     forme = leggi_nei_punti(forma, tr, lats, lons)
     pendenze = leggi_nei_punti(pendenza, tr, lats, lons, vuoto=np.nan)
-    canaloni = salva_canaloni(forma, tr, [{"ovest": ovest, "sud": sud, "est": est, "nord": nord}],
+    canaloni = (salva_canaloni(forma, tr, [{"ovest": ovest, "sud": sud, "est": est, "nord": nord}],
                               codice, RADICE / "docs" / "data" / "canaloni")
+                if solo_celle is None else {})
     del quote_dem, forma, pendenza
 
     raster_corine, tr_corine = corine_riquadro(codice, ovest - MARGINE, sud - MARGINE,

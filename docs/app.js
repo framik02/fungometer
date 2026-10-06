@@ -256,6 +256,7 @@ function aggiungiCelle(celle) {
       const [sud, ovest, nord, est] = cella.bbox;
       const passoLat = (nord - sud) / N, passoLon = (est - ovest) / N;
       stato.aree[cella.area] = {
+        id: cella.area,
         passoLat, passoLon,
         sud: sud - riga * N * passoLat,       // origine della griglia (angolo sud-ovest)
         ovest: ovest - colonna * N * passoLon,
@@ -668,6 +669,9 @@ function segnaGiorniMigliori() {
 
 function preparaMappa() {
   mappa = L.map("mappa", { zoomControl: false }).setView([42.4, 12.6], 8);
+  // Le celle nazionali di confine completano la copertura; i dati locali
+  // più fini restano visibili sopra, indipendentemente dall'ordine di caricamento.
+  mappa.createPane("coperturaItalia").style.zIndex = 390;
 
   // Mappe di base: stradale (OpenStreetMap) o topografica con curve di livello
   // (OpenTopoMap); in più, a scelta, i sentieri escursionistici (Waymarked Trails).
@@ -747,6 +751,7 @@ function preparaMappa() {
     }
     const q = quadratoInPunto(ev.latlng);
     if (q) apriSchedaQuadrato(q);
+    else messaggio("Qui non è disponibile un indice: la copertura esclude acqua, aree senza habitat adatti e punti senza dati.", 7000);
   });
 
   mappa.on("zoomend", () => {
@@ -818,7 +823,10 @@ function creaImmagineZona(zona) {
       [g.sud + (zona.rMax + 1) * N * g.passoLat, g.ovest + (zona.cMax + 1) * N * g.passoLon],
     ];
     zona.limiti = L.latLngBounds(limiti);
-    zona.immagine = L.imageOverlay(zona.tela.toDataURL(), limiti, { className: "quadrati", interactive: false });
+    zona.immagine = L.imageOverlay(zona.tela.toDataURL(), limiti, {
+      className: "quadrati", interactive: false,
+      pane: zona.area.startsWith("i") ? "coperturaItalia" : "overlayPane",
+    });
   }
 }
 
@@ -856,7 +864,8 @@ function preparaImmagineMorbida(a) {
   a.sfumata.width = a.pxW; a.sfumata.height = a.pxH;
   a.limiti = L.latLngBounds([[latSud, lonOvest], [latNord, lonEst]]);
   a.immagine = L.imageOverlay(a.tela.toDataURL(), [[latSud, lonOvest], [latNord, lonEst]],
-    { className: "quadrati-morbidi", interactive: false });
+    { className: "quadrati-morbidi", interactive: false,
+      pane: a.id.startsWith("i") ? "coperturaItalia" : "overlayPane" });
 }
 
 /** Ricolora tutto dopo un cambio di specie o di giorno. */
@@ -1187,8 +1196,10 @@ async function caricaRiquadriIn(limiti) {
   if (!codici.length) return;
   const nuovi = codici.filter((c) => !stato.italia.riquadri[c]);
   if (nuovi.length) messaggio("Carico i dati di questa zona…", 8000);
-  await Promise.all(codici.map(caricaRiquadro));
-  if (nuovi.length) document.getElementById("messaggio").hidden = true;
+  const esiti = await Promise.all(codici.map(caricaRiquadro));
+  if (esiti.some((ok) => !ok)) {
+    messaggio("Alcune zone non sono state caricate. Controlla la connessione e sposta la mappa per riprovare.", 10000);
+  } else if (nuovi.length) document.getElementById("messaggio").hidden = true;
 }
 
 /** Riquadri entro `km` da un punto. */
@@ -1931,10 +1942,12 @@ async function apriSchedaQuadrato(q) {
       <p class="nota">${q.cella.gruppo ? "Il meteo è quello della zona di circa 15 km intorno, con la temperatura corretta per la quota di questa cella." : "Il meteo è quello della zona di 3 km intorno."} <a href="info.html">Come si calcola</a></p>
     </div>`;
 
-  const finestra = L.popup().setLatLng(centro).setContent(html).openOn(mappa);
-  const box = document.querySelector(".leaflet-popup [data-preferito]");
-  if (box) sezionePreferito(box, q);
-  finestra.update();   // la riga dei preferiti allunga la scheda: rifacciamo i conti
+  // Leaflet ricrea il contenuto testuale a ogni update(): mantenere un nodo
+  // conserva il pulsante e i suoi eventi anche dopo ridimensionamenti e zoom.
+  const contenuto = document.createElement("div");
+  contenuto.innerHTML = html;
+  sezionePreferito(contenuto.querySelector("[data-preferito]"), q);
+  L.popup().setLatLng(centro).setContent(contenuto).openOn(mappa);
 }
 
 /**
@@ -2435,7 +2448,10 @@ function preparaPreferiti() {
   disegnaPreferiti();
   const pannello = document.getElementById("pannello-preferiti");
   document.getElementById("apri-preferiti").addEventListener("click", () => {
-    if (pannello.hidden) mostraPreferiti(); else pannello.hidden = true;
+    if (pannello.hidden) {
+      mappa.closePopup();
+      mostraPreferiti();
+    } else pannello.hidden = true;
   });
   document.getElementById("preferiti-chiudi").addEventListener("click", () => { pannello.hidden = true; });
 }
