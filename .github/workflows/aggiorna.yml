@@ -8,6 +8,10 @@ on:
         description: 'Verifica codice e build senza usare credenziali o pubblicare'
         type: boolean
         default: true
+      publish_existing:
+        description: 'Pubblica una fotografia già completa e recente, senza nuove chiamate meteo'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -35,13 +39,14 @@ jobs:
       - run: npm run check:deploy
       - run: npm run build
   aggiorna:
-    # Activate only after credentials and licence are configured.
+    # Owner preview is isolated; public/commercial use requires its licence.
     if: vars.CLOUDFLARE_PIPELINE_READY == 'true' && (github.event_name == 'schedule' || !inputs.verify_only)
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
       PYTHONUNBUFFERED: '1'
-      COMMERCIAL_MODE: 'true'
+      WEATHER_MODE: ${{ vars.WEATHER_MODE }}
+      COMMERCIAL_MODE: ${{ vars.WEATHER_MODE == 'commercial' && 'true' || 'false' }}
       OPEN_METEO_API_KEY: ${{ secrets.OPEN_METEO_API_KEY }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -57,14 +62,13 @@ jobs:
           cache: npm
       - name: Verifica configurazione
         run: |
-          test -n "$OPEN_METEO_API_KEY"
-          test -n "$CLOUDFLARE_API_TOKEN"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          node scripts/check-pipeline.mjs
           node scripts/check-deploy.mjs
       - run: pip install -r requirements.txt pytest
       - run: npm ci
       - run: python -m pytest -q
       - name: Genera dati aggiornati per tutta Italia
+        if: github.event_name == 'schedule' || !inputs.publish_existing
         run: python scripts/aggiorna_punteggi.py
       - name: Verifica freschezza prima della pubblicazione
         run: node scripts/check-data.mjs

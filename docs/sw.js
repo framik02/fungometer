@@ -1,6 +1,6 @@
 // Cache only the application shell. API and map data always require the server.
-const VERSIONE='fungometer-v28-commerce';
-const FILE_APP=['index.html','inizia.html','prezzi.html','account.html','privacy.html','condizioni.html','info.html','stile.css','commerce.css','commerce-map.css','commerce.js','app.js','info.js','legal.js','manifest.webmanifest','icone/icona-32.png','icone/icona-192.png','icone/icona-512.png'];
+const VERSIONE='fungometer-v33-commerce';
+const FILE_APP=['index.html','inizia.html','prezzi.html','account.html','privacy.html','condizioni.html','info.html','stile.css','commerce.css','commerce-map.css','commerce.js','account-care.js','app.js','info.js','legal.js','manifest.webmanifest','icone/icona-32.png','icone/icona-192.png','icone/icona-512.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(VERSIONE).then(c=>c.addAll(FILE_APP)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ns=>Promise.all(ns.filter(n=>n.startsWith('fungometer-')&&n!==VERSIONE).map(n=>caches.delete(n)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{

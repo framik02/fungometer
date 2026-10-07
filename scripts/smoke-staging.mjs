@@ -10,5 +10,6 @@ for(const path of ['/data/punteggi.json','/data/segnalati_web.json','/%64ata/pun
 const r=await fetch(origin+'/api/me'),me=await r.json();
 assert.equal(me.user,null);assert.equal(me.access.active,false);assert.equal(me.authEnabled,config.AUTH_ENABLED==='true');assert.equal(me.paymentsReady,!config.STRIPE_TEST_EXPIRES_AT||Date.parse(config.STRIPE_TEST_EXPIRES_AT)>Date.now());assert.equal(me.paymentsMode,'test');
 assert.equal(me.seller.name,'Francesco Chiarolanza');assert.equal(me.seller.email,'fungometer@gmail.com');
+assert.equal(me.seller.address,config.SELLER_ADDRESS||'');
 if(me.authEnabled){assert.equal(me.authRestricted,true);assert.equal(me.googleReady,true);}
 console.log('Staging verified: pages online, data gated, owner commissioning and Stripe test only.');

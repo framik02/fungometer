@@ -1,6 +1,8 @@
 import { DAY, PLANS, TERMS_VERSION, normalizeEmail, isLocal, entitlement, hmac, verifyStripeSignature, validatePaidSession } from './core.mjs';
 import {googleApi,googleReady} from './google.mjs';
 import {authAccessAllowed} from './auth-access.mjs';
+import {isOwner,launchProgress} from './launch-progress.mjs';
+import {careApi,snapshotOrder} from './customer-care.mjs';
 
 const json = (data, status=200, extra={}) => new Response(JSON.stringify(data), {status, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...extra}});
 class HttpError extends Error { constructor(status,message) { super(message); this.status=status; } }
@@ -111,7 +113,7 @@ async function api(request,env,path) {
   if(request.method==='POST' && request.headers.get('Origin')!==new URL(env.APP_ORIGIN).origin) fail(403,'Origine non autorizzata.');
   if(path.startsWith('/api/auth/google/'))return googleApi(request,env,path,{stmt,fail,json,body,limit,sessionCookie});
   const user=await identity(request,env);
-  if(path==='/api/me' && request.method==='GET') return json({user:user?{email:user.email,analytics:Boolean(user.analytics),canTrial:!user.trial_started_at}:null,
+  if(path==='/api/me' && request.method==='GET') return json({user:user?{email:user.email,analytics:Boolean(user.analytics),canTrial:!user.trial_started_at,isOwner:isOwner(user,env)}:null,
     access:await access(user,env),plans:PLANS,termsVersion:TERMS_VERSION,authEnabled:env.AUTH_ENABLED==='true',authProvider:env.AUTH_PROVIDER||'email',googleReady:googleReady(env),
     authRestricted:env.AUTH_ACCESS==='owner-test',paymentsReady:Boolean(paymentsReady(env)),paymentsMode:env.PAYMENTS_MODE,
     turnstileSiteKey:env.TURNSTILE_SITE_KEY||'',local:isLocal(request,env),
@@ -164,6 +166,24 @@ async function api(request,env,path) {
     return json({ok:true},200,{'Set-Cookie':sessionCookie(token,request)});
   }
   if(!user) fail(401,'Accedi per continuare.');
+  if(path==='/api/orders'||path.startsWith('/api/orders/')||path==='/api/requests'||path.startsWith('/api/owner/')){
+    const response=await careApi(request,env,path,user,{json,fail,body,limit});if(response)return response;
+  }
+  if(path==='/api/account/export' && request.method==='GET') {
+    const orders=await stmt(env,'SELECT id,plan,amount,days,mode,created_at,paid_at,access_start,access_end,revoked,terms_version FROM orders WHERE user_id=? ORDER BY created_at,id',user.id).all();
+    const analytics=await stmt(env,'SELECT event,day FROM funnel_events WHERE user_id=? ORDER BY day,event',user.id).all();
+    const requests=await stmt(env,'SELECT id,kind,order_id,message,created_at,due_at,resolved_at,resolution FROM service_requests WHERE user_id=? ORDER BY created_at',user.id).all();
+    const confirmations=await stmt(env,'SELECT d.order_id,d.snapshot_json,d.created_at,d.confirmation_sent_at FROM order_documents d JOIN orders o ON o.id=d.order_id WHERE o.user_id=?',user.id).all();
+    return json({version:1,exportedAt:new Date().toISOString(),
+      account:{id:user.id,email:user.email,googleId:user.google_sub||null,createdAt:user.created_at,trialStartedAt:user.trial_started_at,trialEndsAt:user.trial_ends_at,analyticsConsent:Boolean(user.analytics)},
+      orders:orders.results.map(order=>({...order,currency:'EUR'})),analytics:analytics.results,requests:requests.results,confirmations:confirmations.results.map(d=>({...d,snapshot_json:JSON.parse(d.snapshot_json)})),
+      note:'Preferiti e selezioni sono salvati soltanto nel browser e non sono inclusi. Gli importi degli ordini sono espressi in centesimi. I messaggi di assistenza sono gestiti separatamente.'
+    },200,{'Content-Disposition':'attachment; filename="fungometer-dati-account.json"','Vary':'Cookie'});
+  }
+  if(path==='/api/owner/launch' && request.method==='GET') {
+    if(!isOwner(user,env)) fail(403,'Accesso riservato al gestore.');
+    return json(await launchProgress(env));
+  }
   if(path==='/api/logout' && request.method==='POST') {
     await stmt(env,'DELETE FROM sessions WHERE token_hash=?',user.token_hash).run();
     return json({ok:true},200,{'Set-Cookie':sessionCookie('',request,0)});
@@ -205,9 +225,11 @@ async function api(request,env,path) {
     await stmt(env,'INSERT OR IGNORE INTO orders(id,user_id,plan,amount,days,mode,created_at,terms_version) VALUES(?,?,?,?,?,?,?,?)',crypto.randomUUID(),user.id,input.plan,plan.amount,plan.days,env.PAYMENTS_MODE,Date.now(),TERMS_VERSION).run();
     const saved=await stmt(env,'SELECT * FROM orders WHERE user_id=? AND plan=? AND mode=? AND paid_at IS NULL AND revoked=0 AND checkout_closed=0',user.id,input.plan,env.PAYMENTS_MODE).first();
     if(!saved) fail(409,'Pagamento già elaborato. Controlla il tuo account.');
+    if(saved.terms_version!==TERMS_VERSION) fail(409,'Le condizioni sono state aggiornate. Il precedente tentativo di pagamento deve scadere prima di crearne uno nuovo; contatta l’assistenza se hai bisogno di aiuto.');
     const id=saved.id;
     if(saved.checkout_url) return json({url:saved.checkout_url});
     if(saved.created_at<Date.now()-23*3600000) fail(409,'Il precedente tentativo sta scadendo. Riprova fra un’ora.');
+    await snapshotOrder(env,saved,user);
     const session=await stripe(env,'checkout/sessions',{
       mode:'payment','payment_method_types[0]':'card',customer_email:user.email,client_reference_id:user.id,
       'metadata[order_id]':id,'payment_intent_data[metadata][order_id]':id,
@@ -243,7 +265,11 @@ async function handle(request,env) {
 export default {
   async fetch(request,env) {
     try {
-      const result=await handle(request,env);
+      // Promote the staged live pair together. A partial pair fails closed;
+      // the owner's test credentials remain untouched for commissioning.
+      const stagedLive=env.PAYMENTS_MODE==='live'&&(env.STRIPE_LIVE_SECRET_KEY||env.STRIPE_LIVE_WEBHOOK_SECRET);
+      const runtimeEnv=stagedLive?{...env,STRIPE_SECRET_KEY:env.STRIPE_LIVE_SECRET_KEY||'',STRIPE_WEBHOOK_SECRET:env.STRIPE_LIVE_WEBHOOK_SECRET||''}:env;
+      const result=await handle(request,runtimeEnv);
       const response=new Response(result.body,result);
       response.headers.set('X-Content-Type-Options','nosniff');
       if(!response.headers.has('Referrer-Policy'))response.headers.set('Referrer-Policy','strict-origin-when-cross-origin');

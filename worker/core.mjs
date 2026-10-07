@@ -1,5 +1,5 @@
 export const DAY = 86400000;
-export const TERMS_VERSION = '2026-10-06';
+export const TERMS_VERSION = '2026-10-07';
 export const PLANS = Object.freeze({
   season: { name: 'Pass 90 giorni', amount: 990, days: 90 },
   year: { name: 'Pass 12 mesi', amount: 1990, days: 365 }

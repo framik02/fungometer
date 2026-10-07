@@ -1,3 +1,7 @@
+# Stato corrente
+
+Per stato operativo e attività completate consultare LANCIO.md e GESTIONE-CLIENTI.md. Le sezioni datate seguenti documentano la preparazione e non sostituiscono lo stato corrente.
+
 # Fungometer — documenti e decisioni per aprire al pubblico
 
 Aggiornato il 6 ottobre 2026. Documento operativo preparatorio, non attestazione di conformità. Il sito rimane in collaudo del solo gestore, Stripe test. Le verifiche professionali non sono sostituite da questo documento.
@@ -47,7 +51,7 @@ Per accesso/portabilità raccogliere account, prove, ordini ed eventi del solo r
 
 Confermare indirizzo professionale e dati fiscali del venditore; non inventarli e non ricavarli dalla verifica bancaria Stripe. Prezzi totali al consumatore, durata, avvio dopo eventuale accesso residuo, assenza di rinnovo, requisiti internet, assistenza e limiti del modello devono comparire prima del pagamento.
 
-Per semplificare il lancio propongo un rimborso integrale entro 14 giorni dall'acquisto anche se l'utente ha già iniziato a consultare il servizio. È una proposta commerciale da confermare, non una regola già pubblicata. Non usare una rinuncia generica al recesso per eliminare i diritti. Definire garanzia legale e rimedi per mancata conformità secondo la classificazione del servizio digitale. Fonte: [MIMIT, recesso](https://www.mimit.gov.it/index.php/it/assistenza/domande-frequenti/diritto-di-recesso-domande-frequenti-faq).
+Il 7 ottobre il gestore ha rifiutato la garanzia commerciale aggiuntiva di rimborso. I testi prevedono i diritti inderogabili di recesso e conformità, senza promessa di rimborso volontario per qualsiasi motivo. Non usare il pagamento o una checkbox generica come rinuncia automatica. Fonte: [MIMIT, recesso](https://www.mimit.gov.it/it/assistenza/domande-frequenti/diritto-di-recesso-domande-frequenti-faq).
 
 Modulo da completare con l'indirizzo del venditore prima della pubblicazione: «A Francesco Chiarolanza, [indirizzo del venditore], fungometer@gmail.com. Comunico il recesso dall'acquisto del pass Fungometer [tipo], ordinato il [data], riferimento [ordine]. Nome [nome], email dell'account [email], indirizzo del consumatore [indirizzo], data [data]. Firma solo se inviato su carta». Una dichiarazione inequivocabile resta valida senza obbligo di questo modello.
 
@@ -60,3 +64,19 @@ Attività prevista: servizio web automatizzato di previsione ambientale, vendita
 Richiedere un preventivo scritto separando avvio, costi annui fissi, contributi minimi eventuali, contabilità e costi per operazione. Chiarire classificazione e codice ATECO vigente, apertura partita IVA, regime applicabile, eventuali Registro imprese/SCIA, gestione INPS, trattamento dei servizi acquistati dall'estero, IVA B2C Italia/UE/extra-UE e OSS se pertinente, fatturazione/corrispettivi, conservazione e riconciliazione Stripe, rimborsi e commissioni. Non assegnare un codice ATECO o una gestione previdenziale solo dal nome dell'app.
 
 I 5.000 EUR indicati dall'INPS sono una franchigia contributiva per il lavoro autonomo realmente occasionale, non un'esenzione generale dalla partita IVA per un sito che vende stabilmente. Fonte: [INPS](https://www.inps.it/it/it/dettaglio-approfondimento.schede-informative.49893.i-contributi-dei-lavoratori-autonomi-occasionali.html). L'attivazione tecnica di Stripe non sostituisce questi adempimenti. Nessun invio al commercialista o agli enti è stato effettuato.
+
+## Conferme del gestore — 7 ottobre 2026
+
+Indirizzo pubblico confermato: Via degli Estensi 1, 00164 Roma, Italia. Inserito nelle informative e nella configurazione Cloudflare. Il gestore conferma di non aver ancora aperto partita IVA né definito l'inquadramento con un commercialista. Nessun dato fiscale inventato; SELLER_TAX_ID resta vuoto.
+
+La scelta precedente del gestore è attivare il piano Open-Meteo al quinto cliente pagante. È una scelta di spesa comunicata, non una deroga concessa dal fornitore: non sono stati acquistati piani né impostata LICENSES_READY=true. Il contatore proprietario dei clienti distinti è già presente. Il workflow quotidiano commerciale richiede ancora OPEN_METEO_API_KEY, CLOUDFLARE_API_TOKEN e il passaggio sul ramo predefinito; non è operativo.
+
+Prossimi elementi da chiudere: inquadramento e dati fiscali; aggiornamento giornaliero effettivo e licenze delle fonti; conservazione/cancellazione account, termini di recesso e rimborso, conferma durevole degli ordini. Non basta attivare il webhook: i segreti live sono predisposti separatamente e le registrazioni restano riservate al gestore.
+
+## Ultima verifica del 7 ottobre 2026
+
+Indirizzo pubblico confermato e pubblicato: Via degli Estensi 1, 00164 Roma, Italia. Dati fiscali ancora da definire: il gestore conferma di non avere ancora aperto partita IVA o consultato un commercialista. Scheda operativa pronta in SCHEDA-COMMERCIALISTA.md, non inviata.
+
+Pubblicata funzione GET /api/account/export, accessibile solo con sessione autorizzata, con account, ordini e statistiche del solo richiedente; esclusi credenziali di sessione, link Checkout e segreti. Download disponibile nell’account, informative aggiornate; cancellazione ancora manuale. Non sono inclusi preferiti locali o corrispondenza di assistenza.
+
+59 test web superati, controllo del sito pubblicato riuscito. Download provato nel browser e file JSON verificato localmente: account del gestore, 3 ordini di collaudo, nessuna credenziale. Versione Cloudflare bfe67ea1-20be-4a89-a619-b84d201157ca. Restano owner-test, pagamenti test e webhook live sospeso. Aggiornamento meteo quotidiano non attivato: dati del 6 ottobre, nessuna data alterata artificialmente.
