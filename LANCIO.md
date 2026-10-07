@@ -31,7 +31,7 @@ Token Cloudflare «Fungometer GitHub daily deploy» creato con autorizzazione es
 3. Completare conservazione dei dati, accordi fornitori e testi commerciali in base all'attività effettiva. Le bozze pubbliche dichiarano i punti mancanti.
 4. Dopo questi punti: dati aggiornati, pubblicazione quotidiana verificata, vecchio canale sostituito, accesso Google pubblico verificato anche da un account diverso dal gestore; passaggio coordinato a live e attivazione del webhook esistente; ricevute Stripe e conferme inviate correttamente; prova reale del pagamento autorizzata separatamente.
 
-Non impostare LIVE_SALES_READY, LICENSES_READY o PRIVATE_DATA_READY come veri per saltare questi controlli. L'account Stripe attivato non dimostra che l'attività sia fiscalmente avviata.
+PRIVATE_DATA_READY è ora true: il rimando e la cessazione della pubblicazione dei nuovi dati sul vecchio canale sono stati verificati. LIVE_SALES_READY e LICENSES_READY restano false; non modificarli per saltare i requisiti ancora mancanti. L'account Stripe attivato non dimostra che l'attività sia fiscalmente avviata.
 
 ## Materiali pronti
 
@@ -53,3 +53,11 @@ Il workflow è ora sul ramo main, pianificato ogni giorno alle 03:17 UTC, con WE
 Browser: richiesta di assistenza ricevuta e gestita; nuovo ordine simulato da 9,90 € pagato e pass attivato; conferma HTML e bozza EML scaricate e verificate. Nessuna email inviata: l’ordine di collaudo resta correttamente fra le conferme non inviate. Nessun rimborso o cancellazione reale eseguito. Il contatore resta 0 clienti reali.
 
 Smoke finale: pagine e nuove risorse online, dati riservati, API non autenticate bloccate e Stripe test. Il sito non è ancora aperto alle vendite reali per i punti elencati sopra.
+
+## Preparazione all’apertura reale — verifica successiva del 7 ottobre
+
+Il gestore ha confermato nuovamente di non avere partita IVA né valutazione del commercialista. Incassi reali non attivati. Corretto il controllo post-pubblicazione: ora verifica modalità test o live e pubblico effettivi, dati venditore e assenza di accesso anonimo a ordini, richieste ed esportazioni. 71 test web superati e nuovo controllo eseguito sul sito.
+
+Metadati del livello umbro effettivamente utilizzato consultati: carta geobotanica, edizione 1999, copyright «Regione - Umbria SIAT», senza licenza di riutilizzo esplicita. Non basta la licenza di altri livelli del portale. Riferimento: https://siat.regione.umbria.it/arcgis/rest/services/public/WEBGIS4_WGS84_UTM33/MapServer/0?f=pjson . Nessuna richiesta a terzi inviata.
+
+Per la sequenza pratica, vedere APERTURA-VENDITE.md.
