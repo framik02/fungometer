@@ -1,3 +1,9 @@
+# Stato corrente — 7 ottobre 2026
+
+Automazione integrata e prima pubblicazione riuscita: [run 37605448885](https://github.com/framik02/fungometer/actions/runs/37605448885). Configurata con WEATHER_MODE=owner-preview, consentita esclusivamente per collaudo del gestore e Stripe test. Token Cloudflare salvato in GitHub, Workers Scripts Write account-wide, scadenza indicata 6 gennaio 2027. Nessun permesso D1 aggiunto. Cron 03:17 UTC sul ramo main; modalità commerciale richiede WEATHER_MODE=commercial e OPEN_METEO_API_KEY.
+
+Il collaudo ha pubblicato la fotografia completa di oggi con publish_existing=true, evitando una seconda acquisizione meteo. Il cron normale rigenera i dati. Va ancora osservata la prima esecuzione pianificata completa. GitHub Pages sostituito con un rimando e vecchio endpoint dati verificato HTTP404. Stato aggiornato in LANCIO.md; le note datate sotto sono il dossier preparatorio.
+
 # Aggiornamento quotidiano — 6 ottobre 2026
 
 ## Stato effettivo
