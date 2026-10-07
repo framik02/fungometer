@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /data/
+Disallow: /account.html
+Sitemap: https://fungometer.chiarolanza-francesco.workers.dev/sitemap.xml

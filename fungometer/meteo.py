@@ -18,7 +18,9 @@ l'altro si aspetta qualche secondo.
 """
 
 import time
-from datetime import date
+import math
+import os
+from datetime import date as calendar_date
 
 import requests
 
@@ -96,7 +98,7 @@ def _chiedi(url, parametri, tentativi=6):
                 time.sleep(60)
                 continue
             if 400 <= risposta.status_code < 500:
-                raise ValueError(f"Richiesta rifiutata da Open-Meteo: {risposta.text[:300]}")
+                raise ValueError(f"Richiesta rifiutata da Open-Meteo: HTTP {risposta.status_code}")
             risposta.raise_for_status()
             dati = risposta.json()
             # Con una sola località Open-Meteo restituisce un dizionario,
@@ -105,7 +107,7 @@ def _chiedi(url, parametri, tentativi=6):
         except requests.RequestException as errore:
             attesa = 5 * tentativo
             # Solo l'inizio del messaggio: l'indirizzo completo è lunghissimo
-            print(f"  errore di rete ({str(errore).split(' for url')[0][:120]}), riprovo fra {attesa} s")
+            print(f"  errore di rete ({type(errore).__name__}), riprovo fra {attesa} s")
             time.sleep(attesa)
     raise RuntimeError(f"Open-Meteo non risponde dopo {tentativi} tentativi")
 
@@ -124,6 +126,11 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
     """
     storico = start_date is not None
     url = URL_STORICO if storico else URL_PREVISIONI
+    api_key = os.environ.get("OPEN_METEO_API_KEY", "").strip()
+    if os.environ.get("COMMERCIAL_MODE") == "true" and not api_key:
+        raise RuntimeError("Imposta OPEN_METEO_API_KEY con una licenza commerciale prima di aggiornare il prodotto commerciale.")
+    if api_key:
+        url = url.replace("https://", "https://customer-", 1)
 
     date = None
     meteo_per_cella = {}
@@ -144,12 +151,17 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
             parametri.update(start_date=start_date, end_date=end_date)
         else:
             parametri.update(past_days=past_days, forecast_days=forecast_days)
+        if api_key:
+            parametri["apikey"] = api_key
 
         if storico:
-            giorni = (date.fromisoformat(end_date) - date.fromisoformat(start_date)).days + 1
+            giorni = (calendar_date.fromisoformat(end_date) - calendar_date.fromisoformat(start_date)).days + 1
         else:
             giorni = past_days + forecast_days
-        _aspetta_il_tetto(_costo(len(lotto), giorni, len(VARIABILI)))
+        # Gli endpoint commerciali non hanno il limite orario del servizio
+        # gratuito. Manteniamo lotti piccoli, timeout e retry anche con chiave.
+        if not api_key:
+            _aspetta_il_tetto(_costo(len(lotto), giorni, len(VARIABILI)))
         partenza = time.monotonic()
         risultati = _chiedi(url, parametri)
         durata = time.monotonic() - partenza
@@ -158,8 +170,20 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
 
         for cella, risultato in zip(lotto, risultati):
             giornaliero = risultato["daily"]
+            tempi = giornaliero.get("time", [])
+            if len(tempi) != giorni or len(set(tempi)) != giorni:
+                raise RuntimeError("Open-Meteo ha restituito un calendario incompleto")
             if date is None:
-                date = giornaliero["time"]
+                date = tempi
+            if tempi != date:
+                raise RuntimeError("Open-Meteo ha restituito calendari diversi fra località")
+            for nome in VARIABILI:
+                valori = giornaliero.get(nome)
+                if not isinstance(valori, list) or len(valori) != giorni or any(
+                    not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v)
+                    for v in valori
+                ):
+                    raise RuntimeError(f"Open-Meteo ha restituito dati incompleti: {nome}")
             meteo_per_cella[cella["id"]] = {
                 corto: giornaliero.get(lungo) or [None] * len(date)
                 for lungo, corto in VARIABILI.items()
@@ -167,6 +191,6 @@ def scarica_meteo(celle, past_days=None, forecast_days=None,
 
         print(f"  meteo: lotto {n}/{len(lotti)} in {durata:.1f} s")
         if n < len(lotti):
-            time.sleep(PAUSA_FRA_LOTTI)
+            time.sleep(0.25 if api_key else PAUSA_FRA_LOTTI)
 
     return date, meteo_per_cella

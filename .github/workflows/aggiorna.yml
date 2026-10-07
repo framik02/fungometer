@@ -1,87 +1,82 @@
-# Aggiorna i punteggi ogni mattina e salva il risultato.
-#
-# Parte alle 4 e un quarto (ora italiana): con il meteo di tutta Italia il
-# lavoro dura circa un'ora e un quarto, per stare sotto le 5.000 chiamate
-# all'ora di Open-Meteo, e i dati nuovi sono pronti prima delle 6.
-#
-# GitHub fa partire i lavori programmati con molto ritardo (a ottobre 2026
-# quelli delle 4:15 partivano verso le 11). Per questo il lavoro è programmato
-# ogni ora dalle 22:17 alle 3:17 UTC (da mezzanotte alle 5 circa in Italia):
-# con --controlla-ora lo script lavora solo se in Italia sono passate le 4 e
-# oggi non l'ha ancora fatto, altrimenti esce in pochi secondi senza chiedere
-# niente a Open-Meteo. Così basta che una partenza arrivi dopo le 4.
-# Il minuto 17 evita il picco di carico all’inizio dell’ora su GitHub Actions.
-# GitHub a volte avvia i cron con qualche decina di minuti di ritardo: è normale.
-#
-# Si può lanciare anche a mano: scheda Actions > Aggiorna punteggi > Run workflow.
-
-name: Aggiorna punteggi
-
+name: Aggiorna e pubblica su Cloudflare
 on:
   schedule:
-    - cron: "17 22,23,0,1,2,3 * * *"
+    - cron: '17 3 * * *'
   workflow_dispatch:
-
-# Serve per fare il commit del nuovo punteggi.json
+    inputs:
+      verify_only:
+        description: 'Verifica codice e build senza usare credenziali o pubblicare'
+        type: boolean
+        default: true
+      publish_existing:
+        description: 'Pubblica una fotografia già completa e recente, senza nuove chiamate meteo'
+        type: boolean
+        default: false
 permissions:
-  contents: write
-
-# Mai due aggiornamenti insieme
+  contents: read
 concurrency:
-  group: aggiorna-punteggi
+  group: cloudflare-production
   cancel-in-progress: false
-
 jobs:
+  verifica:
+    if: github.event_name == 'workflow_dispatch' && inputs.verify_only
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: pip install -r requirements.txt pytest
+      - run: npm ci
+      - run: python -m pytest -q
+      - run: npm test
+      - run: npm run check:deploy
+      - run: npm run build
   aggiorna:
+    # Owner preview is isolated; public/commercial use requires its licence.
+    if: vars.CLOUDFLARE_PIPELINE_READY == 'true' && (github.event_name == 'schedule' || !inputs.verify_only)
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
-      # Mostra subito le stampe di Python nel log, invece che tutte alla fine
-      PYTHONUNBUFFERED: "1"
+      PYTHONUNBUFFERED: '1'
+      WEATHER_MODE: ${{ vars.WEATHER_MODE }}
+      COMMERCIAL_MODE: ${{ vars.WEATHER_MODE == 'commercial' && 'true' || 'false' }}
+      OPEN_METEO_API_KEY: ${{ secrets.OPEN_METEO_API_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Scarica il repository
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          # La versione più recente, non quella di quando il lavoro è entrato in
-          # coda: un lavoro in attesa deve vedere i punteggi già salvati da chi
-          # l'ha preceduto, e uscire invece di rifare tutto
-          ref: main
-
-      - name: Installa Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
+          python-version: '3.12'
           cache: pip
-
-      - name: Installa le librerie
-        run: pip install -r requirements.txt pytest
-
-      - name: Controlla il motore del punteggio (test)
-        run: python -m pytest -q
-
-      - name: Calcola i punteggi
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Verifica configurazione
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            python scripts/aggiorna_punteggi.py --controlla-ora
-          else
-            python scripts/aggiorna_punteggi.py
-          fi
-
-      - name: Salva i punteggi nel repository
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/data
-          if git diff --cached --quiet; then
-            echo "Niente di nuovo da salvare."
-            exit 0
-          fi
-          git commit -m "Punteggi del $(TZ=Europe/Rome date +%Y-%m-%d)"
-          # Il lavoro dura più di un'ora: nel frattempo qualcuno può aver fatto
-          # push. Ci si mette in coda ai suoi commit e si riprova (fino a 3 volte).
-          for tentativo in 1 2 3; do
-            git pull --rebase && git push && exit 0
-            echo "Push rifiutato, riprovo fra 20 secondi"
-            sleep 20
-          done
-          exit 1
+          node scripts/check-pipeline.mjs
+          node scripts/check-deploy.mjs
+      - run: pip install -r requirements.txt pytest
+      - run: npm ci
+      - run: python -m pytest -q
+      - name: Genera dati aggiornati per tutta Italia
+        if: github.event_name == 'schedule' || !inputs.publish_existing
+        run: python scripts/aggiorna_punteggi.py
+      - name: Verifica freschezza prima della pubblicazione
+        run: node scripts/check-data.mjs
+      # Le migrazioni sono un intervento di rilascio, non un lavoro quotidiano.
+      # Non servono permessi di modifica D1 per aggiornare il meteo.
+      - name: Pubblica codice e dati protetti
+        run: npm run deploy
+      - name: Verifica sito pubblicato
+        run: node scripts/smoke-staging.mjs
+      # No commits, public artifacts or forecast caches: newly generated data
+      # goes directly into Worker assets, protected by the access check.

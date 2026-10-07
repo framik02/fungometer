@@ -15,3 +15,14 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 output/
+
+node_modules/
+dist/
+.wrangler/
+.npm-cache/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
+test-results/

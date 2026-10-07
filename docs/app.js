@@ -256,6 +256,7 @@ function aggiungiCelle(celle) {
       const [sud, ovest, nord, est] = cella.bbox;
       const passoLat = (nord - sud) / N, passoLon = (est - ovest) / N;
       stato.aree[cella.area] = {
+        id: cella.area,
         passoLat, passoLon,
         sud: sud - riga * N * passoLat,       // origine della griglia (angolo sud-ovest)
         ovest: ovest - colonna * N * passoLon,
@@ -373,6 +374,11 @@ async function caricaJson(percorso) {
 }
 
 async function avvia() {
+  await window.FungoCommerce.ready;
+  if (!window.FungoCommerce.active) {
+    window.location.replace('account.html?prova=1');
+    return;
+  }
   preparaMappa();
   preparaAvvertenze();
 
@@ -417,7 +423,7 @@ async function avvia() {
 
   // Prima inquadratura: l'ultima area scelta, altrimenti tutte e due
   const area = ricordato("area");
-  if (area === "italia" && stato.italia.panoramica) mappa.fitBounds(ITALIA);
+  if ((!area || area === "italia") && stato.italia.panoramica) mappa.fitBounds(ITALIA);
   else if (area && stato.aree[area]) vaiAllArea(area); else mappa.fitBounds(limitiDi(stato.celle));
   aggiornaStileZoom();
   ricolora();
@@ -427,6 +433,7 @@ async function avvia() {
     .then(() => { disegnaPreferiti(); disegnaSelezione(); segnaGiorniMigliori(); });
 
   document.getElementById("mia-posizione").addEventListener("click", trovaPosizione);
+  window.FungoCommerce.event('map_ready');
 }
 
 // ---------------------------------------------------------------------------
@@ -662,6 +669,9 @@ function segnaGiorniMigliori() {
 
 function preparaMappa() {
   mappa = L.map("mappa", { zoomControl: false }).setView([42.4, 12.6], 8);
+  // Le celle nazionali di confine completano la copertura; i dati locali
+  // più fini restano visibili sopra, indipendentemente dall'ordine di caricamento.
+  mappa.createPane("coperturaItalia").style.zIndex = 390;
 
   // Mappe di base: stradale (OpenStreetMap) o topografica con curve di livello
   // (OpenTopoMap); in più, a scelta, i sentieri escursionistici (Waymarked Trails).
@@ -741,6 +751,7 @@ function preparaMappa() {
     }
     const q = quadratoInPunto(ev.latlng);
     if (q) apriSchedaQuadrato(q);
+    else messaggio("Qui non è disponibile un indice: la copertura esclude acqua, aree senza habitat adatti e punti senza dati.", 7000);
   });
 
   mappa.on("zoomend", () => {
@@ -812,7 +823,10 @@ function creaImmagineZona(zona) {
       [g.sud + (zona.rMax + 1) * N * g.passoLat, g.ovest + (zona.cMax + 1) * N * g.passoLon],
     ];
     zona.limiti = L.latLngBounds(limiti);
-    zona.immagine = L.imageOverlay(zona.tela.toDataURL(), limiti, { className: "quadrati", interactive: false });
+    zona.immagine = L.imageOverlay(zona.tela.toDataURL(), limiti, {
+      className: "quadrati", interactive: false,
+      pane: zona.area.startsWith("i") ? "coperturaItalia" : "overlayPane",
+    });
   }
 }
 
@@ -850,7 +864,8 @@ function preparaImmagineMorbida(a) {
   a.sfumata.width = a.pxW; a.sfumata.height = a.pxH;
   a.limiti = L.latLngBounds([[latSud, lonOvest], [latNord, lonEst]]);
   a.immagine = L.imageOverlay(a.tela.toDataURL(), [[latSud, lonOvest], [latNord, lonEst]],
-    { className: "quadrati-morbidi", interactive: false });
+    { className: "quadrati-morbidi", interactive: false,
+      pane: a.id.startsWith("i") ? "coperturaItalia" : "overlayPane" });
 }
 
 /** Ricolora tutto dopo un cambio di specie o di giorno. */
@@ -1181,8 +1196,10 @@ async function caricaRiquadriIn(limiti) {
   if (!codici.length) return;
   const nuovi = codici.filter((c) => !stato.italia.riquadri[c]);
   if (nuovi.length) messaggio("Carico i dati di questa zona…", 8000);
-  await Promise.all(codici.map(caricaRiquadro));
-  if (nuovi.length) document.getElementById("messaggio").hidden = true;
+  const esiti = await Promise.all(codici.map(caricaRiquadro));
+  if (esiti.some((ok) => !ok)) {
+    messaggio("Alcune zone non sono state caricate. Controlla la connessione e sposta la mappa per riprovare.", 10000);
+  } else if (nuovi.length) document.getElementById("messaggio").hidden = true;
 }
 
 /** Riquadri entro `km` da un punto. */
@@ -1859,6 +1876,7 @@ async function schedeDellaZona(zonaId) {
 }
 
 async function apriSchedaQuadrato(q) {
+  window.FungoCommerce.event('cell_open');
   const limiti = confiniQuadrato(q.area, q.R, q.C);
   const centro = L.latLngBounds(limiti).getCenter();
   if (stato.evidenziato) stato.evidenziato.remove();
@@ -1924,10 +1942,12 @@ async function apriSchedaQuadrato(q) {
       <p class="nota">${q.cella.gruppo ? "Il meteo è quello della zona di circa 15 km intorno, con la temperatura corretta per la quota di questa cella." : "Il meteo è quello della zona di 3 km intorno."} <a href="info.html">Come si calcola</a></p>
     </div>`;
 
-  const finestra = L.popup().setLatLng(centro).setContent(html).openOn(mappa);
-  const box = document.querySelector(".leaflet-popup [data-preferito]");
-  if (box) sezionePreferito(box, q);
-  finestra.update();   // la riga dei preferiti allunga la scheda: rifacciamo i conti
+  // Leaflet ricrea il contenuto testuale a ogni update(): mantenere un nodo
+  // conserva il pulsante e i suoi eventi anche dopo ridimensionamenti e zoom.
+  const contenuto = document.createElement("div");
+  contenuto.innerHTML = html;
+  sezionePreferito(contenuto.querySelector("[data-preferito]"), q);
+  L.popup().setLatLng(centro).setContent(contenuto).openOn(mappa);
 }
 
 /**
@@ -2428,7 +2448,10 @@ function preparaPreferiti() {
   disegnaPreferiti();
   const pannello = document.getElementById("pannello-preferiti");
   document.getElementById("apri-preferiti").addEventListener("click", () => {
-    if (pannello.hidden) mostraPreferiti(); else pannello.hidden = true;
+    if (pannello.hidden) {
+      mappa.closePopup();
+      mostraPreferiti();
+    } else pannello.hidden = true;
   });
   document.getElementById("preferiti-chiudi").addEventListener("click", () => { pannello.hidden = true; });
 }
@@ -2590,17 +2613,20 @@ async function accendiWeb() {
 }
 
 function schedaWeb(p) {
+  const urlFonte = value => {
+    try { const u=new URL(value); return u.protocol==='https:' && ['youtube.com','www.youtube.com','youtu.be','reddit.com','www.reddit.com'].includes(u.hostname) ? testoSicuro(u.href) : null; } catch { return null; }
+  };
   const specie = Object.keys(p.specie || {});
-  const link = p.link.map((l) => `<li><a href="${encodeURI(l.url)}" target="_blank" rel="noopener">${l.piattaforma === "youtube" ? "Video YouTube" : "Discussione Reddit"}</a> del ${testoSicuro(l.data)}</li>`).join("");
+  const link = (p.link || []).filter(l=>urlFonte(l.url)).map((l) => `<li><a href="${urlFonte(l.url)}" target="_blank" rel="noopener noreferrer">${l.piattaforma === "youtube" ? "Video YouTube" : "Discussione Reddit"}</a> del ${testoSicuro(l.data)}</li>`).join("");
   const fonti = [p.youtube ? `${p.youtube} su YouTube` : "", p.reddit ? `${p.reddit} su Reddit` : ""].filter(Boolean).join(", ");
   return `<div class="scheda scheda-web">
       <h3>${testoSicuro(p.nome)}</h3>
       <div class="zona">${p.tipo === "zona" ? "Zona ampia" : "Posto"} citato da ${p.fonti} fonti (${fonti})</div>
       ${specie.length ? `<p>Specie nominate: ${specie.map(testoSicuro).join(", ")}</p>` : ""}
       <p>Ultima citazione: ${testoSicuro(p.ultima)}</p>
-      ${(p.estratti || []).map((e) => `<blockquote class="estratto-web">“${testoSicuro(e.testo)}”
+      ${(p.estratti || []).filter(e=>urlFonte(e.url)).map((e) => `<blockquote class="estratto-web">“${testoSicuro(e.testo)}”
         <span>${e.piattaforma === "youtube" ? "YouTube" : "Reddit"}, ${testoSicuro(e.data)} ·
-        <a href="${encodeURI(e.url)}" target="_blank" rel="noopener">fonte</a></span></blockquote>`).join("")}
+        <a href="${urlFonte(e.url)}" target="_blank" rel="noopener noreferrer">Apri la fonte originale</a></span></blockquote>`).join("")}
       <ul class="fonti-web">${link}</ul>
       <p class="avviso-web">Trovato nei commenti pubblici che parlano di funghi. Una citazione non garantisce niente: può essere vecchia, sbagliata o negativa. Rispetta proprietà private e regole delle aree protette.</p>
     </div>`;

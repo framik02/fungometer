@@ -332,6 +332,10 @@ def main():
     if kb > 1024:
         sys.exit("ATTENZIONE: un file dei punteggi supera 1 MB")
 
+    if not args.senza_italia:
+        from fungometer.pubblicazione import scrivi_manifesto
+        scrivi_manifesto(RADICE)
+
 
 if __name__ == "__main__":
     main()

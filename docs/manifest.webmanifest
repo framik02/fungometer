@@ -1,9 +1,9 @@
 {
   "name": "FungoMeter",
   "short_name": "FungoMeter",
-  "description": "Punteggio giornaliero delle condizioni per i funghi nei dintorni di Foligno e Roma.",
+  "description": "Confronta le condizioni favorevoli ai funghi nella tua zona, in tutta Italia.",
   "lang": "it",
-  "start_url": "./",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
