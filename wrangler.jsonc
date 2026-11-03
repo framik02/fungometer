@@ -20,6 +20,7 @@
   ],
   "vars": {
     "APP_ENV": "staging",
+    "FREE_ACCESS": "true",
     "APP_ORIGIN": "https://fungometer.chiarolanza-francesco.workers.dev",
     "PAYMENTS_MODE": "test",
     "LIVE_SALES_READY": "false",

@@ -20,6 +20,7 @@ if(v.AUTH_ENABLED==='true'){
   // may sign in while commissioning; the Worker enforces this on every request.
   if(v.AUTH_ACCESS==='public')for(const file of ['privacy.html','condizioni.html'])if(/bozza|Versione preparatoria|ancora da configurare/i.test(await readFile('docs/'+file,'utf8')))throw new Error('Complete legal drafts before public registration.');
 }
+if(v.FREE_ACCESS==='true'&&v.PAYMENTS_MODE==='live')throw new Error('Free access and live sales cannot be enabled together.');
 if(v.PAYMENTS_MODE==='live'){
   if(['LIVE_SALES_READY','LICENSES_READY','PRIVATE_DATA_READY'].some(key=>v[key]!=='true')||!v.SELLER_NAME||!v.SELLER_ADDRESS||!v.SELLER_TAX_ID||!v.SUPPORT_EMAIL)throw new Error('Live sales prerequisites are incomplete. Keep Stripe in test mode.');
   for(const file of ['privacy.html','condizioni.html'])if(/bozza|Versione preparatoria|ancora da configurare/i.test(await readFile('docs/'+file,'utf8')))throw new Error('Replace draft legal documents before live sales.');

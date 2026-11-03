@@ -24,6 +24,8 @@ async function identity(request,env) {
   return user&&authAccessAllowed(env,user.email)?user:null;
 }
 async function access(user,env) {
+  // Accesso libero: la mappa si apre a chiunque, senza account e senza pagamento.
+  if (env.FREE_ACCESS==='true') return { active: true, kind: 'free', until: null };
   const paid = user ? await stmt(env,'SELECT MAX(access_end) AS until FROM orders WHERE user_id=? AND mode=? AND revoked=0 AND paid_at IS NOT NULL',user.id,env.PAYMENTS_MODE).first() : null;
   return entitlement(user,paid?.until);
 }
@@ -250,7 +252,7 @@ async function handle(request,env) {
   let path; try { path=decodeURIComponent(url.pathname); } catch { return json({error:'Percorso non valido.'},400); }
   if(path.includes('\\') || path.includes('%') || path.includes('//') || path.split('/').includes('..')) return json({error:'Percorso non valido.'},400);
   if(path.startsWith('/api/')) return api(request,env,path);
-  if(path==='/') return env.ASSETS.fetch(new Request(new URL('/inizia.html',request.url),request));
+  if(path==='/') return env.ASSETS.fetch(new Request(new URL(env.FREE_ACCESS==='true'?'/index.html':'/inizia.html',request.url),request));
   if(!['GET','HEAD'].includes(request.method)) return json({error:'Metodo non consentito.'},405);
   if(path.startsWith('/data/')) {
     const user=await identity(request,env);

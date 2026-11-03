@@ -60,7 +60,8 @@ window.FungoCommerce = (() => {
       $('purchase-terms').nextElementSibling.textContent='Confermo che questo è un pagamento simulato per il collaudo: nessun acquisto reale e nessun addebito. Userò soltanto una carta di test Stripe.';
     }
     if($('purchase-consent')) $('purchase-consent').hidden=!state.user||!state.paymentsReady;
-    if($('commerce-banner')){
+    if($('commerce-banner')&&state.access.kind==='free'){$('commerce-banner').hidden=true;}
+    else if($('commerce-banner')){
       $('commerce-banner').replaceChildren();
       const text=document.createElement('span');text.textContent=state.access.active?`${state.access.kind==='trial'?'Prova gratuita':'Pass attivo'} fino al ${date(state.access.until)}`:'Attiva la prova per consultare la mappa';
       const link=document.createElement('a');link.href=state.access.active?'account.html':'account.html?prova=1';link.textContent=state.access.active?'Il tuo accesso':'Prova tutta Italia gratis';$('commerce-banner').append(text,link);
