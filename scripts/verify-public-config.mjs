@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 export function verifyPublicConfig(config,me,now=Date.now()){
  assert.ok(['test','live'].includes(config.PAYMENTS_MODE),'Explicit payment mode required');
  assert.equal(me.user,null,'Anonymous request must not expose an account');
- assert.equal(me.access.active,false,'Anonymous request must not have map access');
+ if(config.FREE_ACCESS==='true')assert.equal(me.access.kind,'free','Free access is not active');
+ else assert.equal(me.access.active,false,'Anonymous request must not have map access');
  assert.equal(me.local,false,'Local authentication must never be deployed');
  assert.equal(me.authEnabled,config.AUTH_ENABLED==='true','Authentication switch differs');
  assert.equal(me.authRestricted,config.AUTH_ACCESS==='owner-test','Audience differs');
